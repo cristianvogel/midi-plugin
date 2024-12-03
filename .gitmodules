@@ -5,5 +5,6 @@
 	path = native/juce
 	url = https://github.com/juce-framework/JUCE.git
 [submodule "choc"]
-	path = native/choc
-	url = https://github.com/nick-thompson/choc.git
+   	path = native/choc
+   	url = https://github.com/cristianvogel/choc
+   	branch = cristians-edits
