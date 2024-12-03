@@ -7,3 +7,4 @@
 [submodule "native/choc"]
     path = native/choc
     url = https://github.com/cristianvogel/choc.git
+    branch = cristians-edits
