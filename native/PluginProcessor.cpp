@@ -106,17 +106,17 @@ const juce::String EffectsPluginProcessor::getName() const
 
 bool EffectsPluginProcessor::acceptsMidi() const
 {
-    return false;
+    return true;
 }
 
 bool EffectsPluginProcessor::producesMidi() const
 {
-    return false;
+    return true;
 }
 
 bool EffectsPluginProcessor::isMidiEffect() const
 {
-    return false;
+    return true;
 }
 
 double EffectsPluginProcessor::getTailLengthSeconds() const
