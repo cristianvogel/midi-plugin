@@ -5,6 +5,8 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include <choc_javascript.h>
+#include <choc_javascript_Console.h>
+#include <choc_HighResolutionSteadyClock.h>
 #include <elem/Runtime.h>
 
 
@@ -68,6 +70,8 @@ public:
     void dispatchError(std::string const& name, std::string const& message);
 
 private:
+    //===== MIDI business
+    using MIDIClock = choc::HighResolutionSteadyClock
     //==============================================================================
     std::atomic<bool> runtimeSwapRequired{false};
     std::atomic<bool> shouldInitialize { false };

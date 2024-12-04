@@ -181,6 +181,9 @@ bool EffectsPluginProcessor::isBusesLayoutSupported(const AudioProcessor::BusesL
 
 void EffectsPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /* midiMessages */)
 {
+    juce::ScopedNoDenormals noDenormals;
+
+
 
     // Copy the input so that our input and output buffers are distinct
     scratchBuffer.makeCopyOf(buffer, true);
@@ -229,8 +232,6 @@ void EffectsPluginProcessor::handleAsyncUpdate()
     // runtime and engine.
     if (shouldInitialize.exchange(false))
     {
-        // TODO: This is definitely not thread-safe! It could delete a Runtime instance while
-        // the real-time thread is using it. Depends on when the host will call prepareToPlay.
         elementaryRuntime = std::make_unique<elem::Runtime<float>>(lastKnownSampleRate, lastKnownBlockSize);
         initJavaScriptEngine();
         runtimeSwapRequired.store(false);
