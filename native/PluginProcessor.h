@@ -7,6 +7,8 @@
 #include <choc_javascript.h>
 #include <choc_javascript_Console.h>
 #include <choc_HighResolutionSteadyClock.h>
+#include <choc_MIDI.h>
+#include <choc_SingleReaderSingleWriterFIFO.h>
 #include <elem/Runtime.h>
 
 
@@ -69,9 +71,22 @@ public:
     void dispatchStateChange();
     void dispatchError(std::string const& name, std::string const& message);
 
+    //=== MIDI business
+    void dispatchMIDI( );
+
 private:
-    //===== MIDI business
-    using MIDIClock = choc::HighResolutionSteadyClock
+    //=== MIDI business
+    using MIDIClock = choc::HighResolutionSteadyClock;
+    struct IncomingMIDIEvent
+    {
+        MIDIClock::time_point time;
+        choc::midi::ShortMessage message;
+    };
+    choc::fifo::SingleReaderSingleWriterFIFO<IncomingMIDIEvent> midiFifoQueue;
+
+
+
+
     //==============================================================================
     std::atomic<bool> runtimeSwapRequired{false};
     std::atomic<bool> shouldInitialize { false };

@@ -179,11 +179,12 @@ bool EffectsPluginProcessor::isBusesLayoutSupported(const AudioProcessor::BusesL
     return true;
 }
 
-void EffectsPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /* midiMessages */)
+void EffectsPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages )
 {
     juce::ScopedNoDenormals noDenormals;
 
-
+    // Process all MIDI first
+    auto now = MIDIClock::now();
 
     // Copy the input so that our input and output buffers are distinct
     scratchBuffer.makeCopyOf(buffer, true);
@@ -192,7 +193,7 @@ void EffectsPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     buffer.clear();
 
     // Process the elementary runtime
-     if (elementaryRuntime != nullptr && !runtimeSwapRequired)
+    if (elementaryRuntime != nullptr && !runtimeSwapRequired)
     {
         elementaryRuntime->process(
             const_cast<const float**>(scratchBuffer.getArrayOfWritePointers()),
@@ -202,6 +203,18 @@ void EffectsPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
             buffer.getNumSamples(),
             nullptr
         );
+    }
+
+    // not sure if this needs to be handled like a runtime swap
+    // observing...
+    if(!midiMessages.isEmpty() && !runtimeSwapRequired) {
+        for (const auto metadata : midiMessages) {
+            auto bytes = metadata.getMessage().getRawData();
+            auto m = choc::midi::ShortMessage (bytes[0], bytes[1], bytes[2]);
+            midiFifoQueue.push({ now, m });
+        }
+
+        triggerAsyncUpdate();
     }
 
     if (runtimeSwapRequired)
@@ -362,7 +375,8 @@ void EffectsPluginProcessor::initJavaScriptEngine()
 })();
 )script";
 
-    auto expr = juce::String(kHydrateScript).replace("%", elem::js::serialize(elem::js::serialize(elementaryRuntime->snapshot())))
+    auto expr = juce::String(kHydrateScript).replace("%", elem::js::serialize(
+                                                         elem::js::serialize(elementaryRuntime->snapshot())))
                                             .toStdString();
     jsContext.evaluateExpression(expr);
 }
@@ -399,6 +413,55 @@ void EffectsPluginProcessor::dispatchStateChange()
     // here on the main thread
     jsContext.evaluateExpression(expr);
 }
+
+//= MIDI out to WebView and jsContext
+void EffectsPluginProcessor::dispatchMIDI()
+{
+    const uint32_t midiCount = midiFifoQueue.getUsedSlots();
+
+    elem::js::Array vec;
+
+    if (midiCount > 0)
+    {
+        IncomingMIDIEvent m;
+        while (midiFifoQueue.pop(m))
+        {
+            vec.push_back(elem::js::Value(m.message.toHexString()));
+        };
+    }
+
+   const auto serializedMidi = elem::js::serialize(vec);
+
+
+    const auto* kDispatchScript = R"script(
+    (function() {
+      if (typeof globalThis.__receiveMIDI__ !== 'function')
+        return false;
+
+      globalThis.__receiveMIDI__(%);
+      return true;
+    })();
+    )script";
+
+    // Need the double serialize here to correctly form the string script. The first
+    // serialize produces the payload we want, the second serialize ensures we can replace
+    // the % character in the above script block and produce a valid javascript expression.
+
+    const auto expr = juce::String(kDispatchScript).replace("%", elem::js::serialize(elem::js::serialize(serializedMidi))).
+                                              toStdString();
+
+    // First we try to dispatch to the UI if it's available, because running this step will
+    // just involve placing a message in a queue.
+    if (const auto* editor = dynamic_cast<WebViewEditor*>(getActiveEditor()))
+    {
+        editor->getWebViewPtr()->evaluateJavascript(expr);
+    }
+
+    // Next we dispatch to the local engine which will evaluate any necessary JavaScript synchronously
+    // here on the main thread
+    jsContext.evaluateExpression(expr);
+}
+
 
 void EffectsPluginProcessor::dispatchError(std::string const& name, std::string const& message)
 {

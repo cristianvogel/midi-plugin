@@ -9,8 +9,10 @@ struct IncomingMIDIEvent
     choc::midi::ShortMessage message;
 };
 choc::fifo::SingleReaderSingleWriterFIFO<IncomingMIDIEvent> midiFifoQueue;
+```
 each event has a time and a message
-in PluginProcessor.cpp I'm syncing the midi messages using distpatchStateChange to the web context (that's where elementary DSP code lives + UI all in one)
+in `PluginProcessor.cpp` I'm syncing the midi messages using `distpatchStateChange` to the web context (that's where elementary DSP code lives + UI all in one)
+```c++
 void UPPluginProcessor::dispatchStateChange()
 {
     const uint32_t midiCount = midiFifoQueue.getUsedSlots();

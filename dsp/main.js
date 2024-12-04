@@ -54,6 +54,13 @@ globalThis.__receiveStateChange__ = (serializedState) => {
   prevState = state;
 };
 
+
+globalThis.__receiveMIDI__ = (data) => {
+  console.log( 'received MIDI message', JSON.parse( data ))
+}
+
+
+////////////////////////////////////////////////////////////////////
 // NOTE: This is highly experimental and should not yet be relied on
 // as a consistent feature.
 //
