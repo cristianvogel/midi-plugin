@@ -12,7 +12,8 @@ option(ELEM_DEV_LOCALHOST "Run against localhost for static assets" OFF)
 add_subdirectory(juce)
 add_subdirectory(elementary/runtime)
 
-juce_add_plugin(${TARGET_NAME}
+juce_add_plugin(
+        ${TARGET_NAME}
         BUNDLE_ID "audio.twiddle.mindfulharmony."
         COMPANY_NAME "Twiddle Coding"
         COMPANY_WEBSITE "https://www.mindfulharmony.app/"
@@ -23,7 +24,11 @@ juce_add_plugin(${TARGET_NAME}
         APP_SANDBOX_ENABLED TRUE
         APP_SANDBOX_OPTIONS com.apple.security.network.client com.apple.security.files.user-selected.read-write
         FORMATS AU VST3                     # The formats to build. Other valid formats are: AAX Unity VST AU AUv3
-        PRODUCT_NAME ${TARGET_NAME})        # The name of the final executable, which can differ from the target name
+        PRODUCT_NAME ${TARGET_NAME}       # The name of the final executable, which can differ from the target name
+        NEEDS_MIDI_OUTPUT TRUE
+        IS_MIDI_EFFECT TRUE
+        NEEDS_MIDI_INPUT TRUE
+)
 
 # Copy static assets post build
 if (NOT ELEM_DEV_LOCALHOST)

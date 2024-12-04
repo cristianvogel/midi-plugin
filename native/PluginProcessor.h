@@ -13,15 +13,15 @@
 
 
 //==============================================================================
-class EffectsPluginProcessor : public juce::AudioProcessor,
+class MindfulMIDI : public juce::AudioProcessor,
                                public juce::AudioProcessorParameter::Listener,
                                private juce::AsyncUpdater
 
 {
 public:
     //==============================================================================
-    EffectsPluginProcessor();
-    ~EffectsPluginProcessor() override;
+    MindfulMIDI();
+    ~MindfulMIDI() override;
 
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;
@@ -112,6 +112,6 @@ private:
     static_assert(std::atomic<ParameterReadout>::is_always_lock_free);
 
     //==============================================================================
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EffectsPluginProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MindfulMIDI)
 };
 #endif //PLUGINPROCESSOR_H
