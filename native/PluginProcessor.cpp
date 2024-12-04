@@ -181,6 +181,7 @@ bool EffectsPluginProcessor::isBusesLayoutSupported(const AudioProcessor::BusesL
 
 void EffectsPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /* midiMessages */)
 {
+
     // Copy the input so that our input and output buffers are distinct
     scratchBuffer.makeCopyOf(buffer, true);
 
@@ -188,9 +189,9 @@ void EffectsPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     buffer.clear();
 
     // Process the elementary runtime
-    if (runtime != nullptr)
+     if (elementaryRuntime != nullptr && !runtimeSwapRequired)
     {
-        runtime->process(
+        elementaryRuntime->process(
             const_cast<const float**>(scratchBuffer.getArrayOfWritePointers()),
             getTotalNumInputChannels(),
             const_cast<float**>(buffer.getArrayOfWritePointers()),
@@ -198,6 +199,12 @@ void EffectsPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
             buffer.getNumSamples(),
             nullptr
         );
+    }
+
+    if (runtimeSwapRequired)
+    {
+        shouldInitialize.store(true);
+        triggerAsyncUpdate();
     }
 }
 
@@ -224,8 +231,9 @@ void EffectsPluginProcessor::handleAsyncUpdate()
     {
         // TODO: This is definitely not thread-safe! It could delete a Runtime instance while
         // the real-time thread is using it. Depends on when the host will call prepareToPlay.
-        runtime = std::make_unique<elem::Runtime<float>>(lastKnownSampleRate, lastKnownBlockSize);
+        elementaryRuntime = std::make_unique<elem::Runtime<float>>(lastKnownSampleRate, lastKnownBlockSize);
         initJavaScriptEngine();
+        runtimeSwapRequired.store(false);
     }
 
     // Next we iterate over the current parameter values to update our local state
@@ -264,7 +272,7 @@ void EffectsPluginProcessor::initJavaScriptEngine()
     jsContext.registerFunction("__postNativeMessage__", [this](choc::javascript::ArgumentList args)
     {
         auto const batch = elem::js::parseJSON(args[0]->toString());
-        auto const rc = runtime->applyInstructions(batch);
+        auto const rc = elementaryRuntime->applyInstructions(batch);
 
         if (rc != elem::ReturnCode::Ok())
         {
@@ -353,7 +361,7 @@ void EffectsPluginProcessor::initJavaScriptEngine()
 })();
 )script";
 
-    auto expr = juce::String(kHydrateScript).replace("%", elem::js::serialize(elem::js::serialize(runtime->snapshot())))
+    auto expr = juce::String(kHydrateScript).replace("%", elem::js::serialize(elem::js::serialize(elementaryRuntime->snapshot())))
                                             .toStdString();
     jsContext.evaluateExpression(expr);
 }

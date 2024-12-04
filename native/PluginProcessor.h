@@ -69,6 +69,7 @@ public:
 
 private:
     //==============================================================================
+    std::atomic<bool> runtimeSwapRequired{false};
     std::atomic<bool> shouldInitialize { false };
     double lastKnownSampleRate = 0;
     int lastKnownBlockSize = 0;
@@ -78,7 +79,7 @@ private:
 
     juce::AudioBuffer<float> scratchBuffer;
 
-    std::unique_ptr<elem::Runtime<float>> runtime;
+    std::unique_ptr<elem::Runtime<float>> elementaryRuntime;
 
     //==============================================================================
     // A simple "dirty list" abstraction here for propagating realtime parameter
