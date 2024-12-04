@@ -13,20 +13,30 @@ class WebViewEditor : public juce::AudioProcessorEditor
 {
 public:
     //==============================================================================
-    WebViewEditor(juce::AudioProcessor* proc, juce::File const& assetDirectory, int width, int height);
-
+    WebViewEditor(juce::AudioProcessor *proc, juce::File const &assetDirectory, int width, int height);
+    ~WebViewEditor() override;
+   //==============================================================================
+    choc::ui::WebView* getWebViewPtr() const;
     //==============================================================================
-    choc::ui::WebView* getWebViewPtr();
-
-    //==============================================================================
-    void paint (juce::Graphics& g) override;
+    void paint(juce::Graphics &g) override;
     void resized() override;
 
-private:
-    //==============================================================================
-    choc::value::Value handleSetParameterValueEvent(const choc::value::ValueView& e);
 
-    //==============================================================================
+    std::function<void(const std::string &, float)> setParameterValue = [](const std::string &, float) {};
+    std::function<void()> reload = []() {};
+    std::function<void()> ready = []() {};
+
+    void executeJavascript(const std::string &script) const;
+
+private:
+    std::string POST_NATIVE_MESSAGE = "__postNativeMessage__";
+    std::string READY_EVENT = "ready";
+    std::string RELOAD_EVENT = "reload";
+    std::string SET_PARAMETER_VALUE = "setParameterValue";
+    std::string SERVER_PORT = "serverInfo";
+
+    choc::value::Value handleSetParameterValueEvent(const choc::value::ValueView &e) const;
+
     std::unique_ptr<choc::ui::WebView> webView;
 
 #if JUCE_MAC
@@ -34,6 +44,6 @@ private:
 #elif JUCE_WINDOWS
     juce::HWNDComponent viewContainer;
 #else
- #error "We only support MacOS and Windows here yet."
+#error "We only support MacOS and Windows here yet."
 #endif
 };

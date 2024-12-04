@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(Elem_SRVB VERSION 0.1.0)
+project(MindfulHarmony VERSION 0.0.1)
 
 
 set(TARGET_NAME SRVB)
@@ -13,12 +13,12 @@ add_subdirectory(juce)
 add_subdirectory(elementary/runtime)
 
 juce_add_plugin(${TARGET_NAME}
-  BUNDLE_ID "audio.elementary.srvb"
-  COMPANY_NAME "Elementary Audio"
-  COMPANY_WEBSITE "https://www.elementary.audio"
-  COMPANY_EMAIL "nick@elementary.audio"
-  PLUGIN_MANUFACTURER_CODE Elem       # A four-character manufacturer id with at least one upper-case character
-  PLUGIN_CODE Srvb                    # A unique four-character plugin id with at least one upper-case character
+  BUNDLE_ID "audio.twiddle.mindfulharmony."
+  COMPANY_NAME "Twiddle Coding"
+  COMPANY_WEBSITE "https://www.mindfulharmony.app/"
+  COMPANY_EMAIL "account@twiddlecoding.com"
+  PLUGIN_MANUFACTURER_CODE Twdl       # A four-character manufacturer id with at least one upper-case character
+  PLUGIN_CODE MdHm                    # A unique four-character plugin id with at least one upper-case character
   COPY_PLUGIN_AFTER_BUILD FALSE       # We enable this manually below after adding a copy step
   APP_SANDBOX_ENABLED TRUE
   APP_SANDBOX_OPTIONS com.apple.security.network.client com.apple.security.files.user-selected.read-write

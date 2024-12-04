@@ -1,4 +1,5 @@
-#pragma once
+#ifndef PLUGINPROCESSOR_H
+#define PLUGINPROCESSOR_H
 
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -8,10 +9,10 @@
 
 
 //==============================================================================
-class EffectsPluginProcessor
-    : public juce::AudioProcessor,
-      public juce::AudioProcessorParameter::Listener,
-      private juce::AsyncUpdater
+class EffectsPluginProcessor : public juce::AudioProcessor,
+                               public juce::AudioProcessorParameter::Listener,
+                               private juce::AsyncUpdater
+
 {
 public:
     //==============================================================================
@@ -93,3 +94,4 @@ private:
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EffectsPluginProcessor)
 };
+#endif //PLUGINPROCESSOR_H
