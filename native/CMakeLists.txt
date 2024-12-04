@@ -76,9 +76,9 @@ target_link_libraries(${TARGET_NAME}
   juce::juce_audio_utils
   juce::juce_core
   juce::juce_data_structures
-  juce::juce_dsp
+  # juce::juce_dsp
   juce::juce_events
-  juce::juce_graphics
+  # juce::juce_graphics
   juce::juce_gui_basics
   juce::juce_gui_extra
   runtime)
