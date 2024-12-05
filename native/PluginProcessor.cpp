@@ -90,7 +90,7 @@ MindfulMIDI::~MindfulMIDI()
 //==============================================================================
 juce::AudioProcessorEditor* MindfulMIDI::createEditor()
 {
-    return new WebViewEditor(this, getAssetsDirectory(), 800, 704);
+    return new WebViewEditor(this, getAssetsDirectory(), 800, 500);
 }
 
 bool MindfulMIDI::hasEditor() const
