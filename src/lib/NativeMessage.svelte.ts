@@ -1,6 +1,12 @@
-import { IncomingRawMIDI } from "../state/customState.svelte"
-import {data} from "autoprefixer";
+/** ━━━━━━━
+ *  This code sets up the handlers for receiving messages and sending
+ *  messages between the UI layer and the backend native code.
+ *
+ *  These observers will be destroyed when the UI is closed.
+ */
 
+
+import { IncomingRawMIDI } from "../state/customState.svelte"
 
 export declare var globalThis: any;
 
