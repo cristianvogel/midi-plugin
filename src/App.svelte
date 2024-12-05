@@ -1,10 +1,11 @@
 <script lang="ts">
     import {onMount} from "svelte";
-    import MidiParser from 'midi-parser-js'
     import {RegisterMessagesFromHost} from "./lib/NativeMessage.svelte";
-    import {IncomingRawMIDI} from "./state/customState.svelte";
+    import {IncomingMIDI} from "./state/customState.svelte";
 
-    let midiMessageRaw = $derived( IncomingRawMIDI.current )
+
+    let midiMessageRaw = $derived(IncomingMIDI.current);
+
 
   onMount( ()=>
   {
@@ -12,12 +13,6 @@
       RegisterMessagesFromHost();
   })
 
-   $effect( ()=> {
-            MidiParser.parse(new Uint8Array(IncomingRawMIDI.current), function (obj: any) {
-                console.log('parsed MIDI message', obj);
-            });
-        }
-    );
 
 </script>
 
@@ -26,5 +21,12 @@
     <h1>🪬 Hello Mindful MIDI ! </h1>
 </div>
 <div>
-    <pre>{midiMessageRaw}</pre>
+    <pre class="midi-message">{midiMessageRaw}</pre>
 </div>
+
+<style>
+    .midi-message {
+            color: lawngreen;
+            font-size: larger;
+        }
+</style>

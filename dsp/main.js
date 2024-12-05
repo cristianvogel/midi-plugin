@@ -1,7 +1,6 @@
 import {Renderer, el} from '@elemaudio/core';
 import {RefMap} from './RefMap';
 import synth from "./synth.js";
-import {MidiParser} from "midi-parser-js/src/midi-parser.js";
 
 // First, we initialize a custom Renderer instance that marshals our instruction
 // batches through the __postNativeMessage__ function to direct the underlying native
@@ -58,12 +57,7 @@ globalThis.__receiveStateChange__ = (serializedState) => {
 // Define another global function to perform the parsing in one place
 //
 globalThis.__receiveMIDI__ = (data) => {
-    console.log('received raw MIDI message', JSON.parse(data))
-    if (data instanceof ArrayBuffer) {
-        MidiParser.parse(new Uint8Array(data), function (obj) {
-            console.log('parsed MIDI message', obj);
-        });
-    }
+    console.log('QUICKJS::received raw MIDI message', JSON.parse(data))
 }
 
 //---------------------------------------------------------------------

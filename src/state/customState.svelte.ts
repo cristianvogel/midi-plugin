@@ -1,4 +1,35 @@
 
+import {hexStringToUint8Array} from "../utils/helpers";
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// This reactive function will handle new incoming MIDI
+// Can return a raw hex string, as received
+// or parse it into Uint8 byte array
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export const IncomingMIDI = rawMIDI(["00 00 00"]);
+function rawMIDI(initial: string[]) {
+    let current = $state(initial);
+    return {
+        get current() {
+            return current;
+        },
+        update(newValues: string[]) {
+            current = newValues;
+        },
+        get snapshot() {
+            return $state.snapshot(current);
+        },
+        get parsed() {
+            return hexStringToUint8Array( current[0] )
+        }
+
+    };
+}
+
+
+
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // This reactive function will handle updates to the host state
@@ -13,26 +44,6 @@ function hostState(initial: any) {
             return current;
         },
         update(newValues: any) {
-            current = newValues;
-        },
-        get snapshot() {
-            return $state.snapshot(current);
-        }
-    };
-}
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// This reactive function will handle new incoming MIDI
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-let midiMessage: ArrayBuffer = new Uint8Array([0, 0, 0]);
-export const IncomingRawMIDI = rawMIDI(midiMessage);
-function rawMIDI(initial: ArrayBuffer) {
-    let current = $state(initial);
-    return {
-        get current() {
-            return current;
-        },
-        update(newValues: ArrayBuffer) {
             current = newValues;
         },
         get snapshot() {
