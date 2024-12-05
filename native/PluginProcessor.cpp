@@ -24,7 +24,7 @@ juce::File getAssetsDirectory()
 }
 
 //==============================================================================
-EffectsPluginProcessor::EffectsPluginProcessor()
+MindfulMIDI::MindfulMIDI()
     : AudioProcessor(BusesProperties()
                      .withInput("Input", juce::AudioChannelSet::stereo(), true)
                      .withOutput("Output", juce::AudioChannelSet::stereo(), true))
@@ -79,7 +79,7 @@ EffectsPluginProcessor::EffectsPluginProcessor()
     }
 }
 
-EffectsPluginProcessor::~EffectsPluginProcessor()
+MindfulMIDI::~MindfulMIDI()
 {
     for (auto& p : getParameters())
     {
@@ -88,66 +88,66 @@ EffectsPluginProcessor::~EffectsPluginProcessor()
 }
 
 //==============================================================================
-juce::AudioProcessorEditor* EffectsPluginProcessor::createEditor()
+juce::AudioProcessorEditor* MindfulMIDI::createEditor()
 {
-    return new WebViewEditor(this, getAssetsDirectory(), 800, 704);
+    return new WebViewEditor(this, getAssetsDirectory(), 800, 500);
 }
 
-bool EffectsPluginProcessor::hasEditor() const
+bool MindfulMIDI::hasEditor() const
 {
     return true;
 }
 
 //==============================================================================
-const juce::String EffectsPluginProcessor::getName() const
+const juce::String MindfulMIDI::getName() const
 {
     return JucePlugin_Name;
 }
 
-bool EffectsPluginProcessor::acceptsMidi() const
+bool MindfulMIDI::acceptsMidi() const
 {
-    return false;
+    return true;
 }
 
-bool EffectsPluginProcessor::producesMidi() const
+bool MindfulMIDI::producesMidi() const
 {
-    return false;
+    return true;
 }
 
-bool EffectsPluginProcessor::isMidiEffect() const
+bool MindfulMIDI::isMidiEffect() const
 {
-    return false;
+    return true;
 }
 
-double EffectsPluginProcessor::getTailLengthSeconds() const
+double MindfulMIDI::getTailLengthSeconds() const
 {
     return 0.0;
 }
 
 //==============================================================================
-int EffectsPluginProcessor::getNumPrograms()
+int MindfulMIDI::getNumPrograms()
 {
     return 1; // NB: some hosts don't cope very well if you tell them there are 0 programs,
     // so this should be at least 1, even if you're not really implementing programs.
 }
 
-int EffectsPluginProcessor::getCurrentProgram()
+int MindfulMIDI::getCurrentProgram()
 {
     return 0;
 }
 
-void EffectsPluginProcessor::setCurrentProgram(int /* index */)
+void MindfulMIDI::setCurrentProgram(int /* index */)
 {
 }
 
-const juce::String EffectsPluginProcessor::getProgramName(int /* index */) { return {}; }
+const juce::String MindfulMIDI::getProgramName(int /* index */) { return {}; }
 
-void EffectsPluginProcessor::changeProgramName(int /* index */, const juce::String& /* newName */)
+void MindfulMIDI::changeProgramName(int /* index */, const juce::String& /* newName */)
 {
 }
 
 //==============================================================================
-void EffectsPluginProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
+void MindfulMIDI::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     // Some hosts call `prepareToPlay` on the real-time thread, some call it on the main thread.
     // To address the discrepancy, we check whether anything has changed since our last known
@@ -168,19 +168,24 @@ void EffectsPluginProcessor::prepareToPlay(double sampleRate, int samplesPerBloc
     triggerAsyncUpdate();
 }
 
-void EffectsPluginProcessor::releaseResources()
+void MindfulMIDI::releaseResources()
 {
     // When playback stops, you can use this as an opportunity to free up any
     // spare memory, etc.
 }
 
-bool EffectsPluginProcessor::isBusesLayoutSupported(const AudioProcessor::BusesLayout& layouts) const
+bool MindfulMIDI::isBusesLayoutSupported(const AudioProcessor::BusesLayout& layouts) const
 {
     return true;
 }
 
-void EffectsPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /* midiMessages */)
+void MindfulMIDI::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages )
 {
+    juce::ScopedNoDenormals noDenormals;
+
+    // Process all MIDI first
+    auto now = MIDIClock::now();
+
     // Copy the input so that our input and output buffers are distinct
     scratchBuffer.makeCopyOf(buffer, true);
 
@@ -188,9 +193,9 @@ void EffectsPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     buffer.clear();
 
     // Process the elementary runtime
-    if (runtime != nullptr)
+    if (elementaryRuntime != nullptr && !runtimeSwapRequired)
     {
-        runtime->process(
+        elementaryRuntime->process(
             const_cast<const float**>(scratchBuffer.getArrayOfWritePointers()),
             getTotalNumInputChannels(),
             const_cast<float**>(buffer.getArrayOfWritePointers()),
@@ -199,9 +204,27 @@ void EffectsPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
             nullptr
         );
     }
+
+    // not sure if this needs to be handled like a runtime swap
+    // observing...
+    if(!midiMessages.isEmpty() ) {
+        for (const auto metadata : midiMessages) {
+            auto bytes = metadata.getMessage().getRawData();
+            auto m = choc::midi::ShortMessage (bytes[0], bytes[1], bytes[2]);
+            midiFifoQueue.push({ now, m });
+        }
+
+        triggerAsyncUpdate();
+    }
+
+    if (runtimeSwapRequired)
+    {
+        shouldInitialize.store(true);
+        triggerAsyncUpdate();
+    }
 }
 
-void EffectsPluginProcessor::parameterValueChanged(int parameterIndex, float newValue)
+void MindfulMIDI::parameterValueChanged(int parameterIndex, float newValue)
 {
     // Mark the updated parameter value in the dirty list
     auto& pr = *std::next(paramReadouts.begin(), parameterIndex);
@@ -210,22 +233,21 @@ void EffectsPluginProcessor::parameterValueChanged(int parameterIndex, float new
     triggerAsyncUpdate();
 }
 
-void EffectsPluginProcessor::parameterGestureChanged(int, bool)
+void MindfulMIDI::parameterGestureChanged(int, bool)
 {
     // Not implemented
 }
 
 //==============================================================================
-void EffectsPluginProcessor::handleAsyncUpdate()
+void MindfulMIDI::handleAsyncUpdate()
 {
     // First things first, we check the flag to identify if we should initialize the Elementary
     // runtime and engine.
     if (shouldInitialize.exchange(false))
     {
-        // TODO: This is definitely not thread-safe! It could delete a Runtime instance while
-        // the real-time thread is using it. Depends on when the host will call prepareToPlay.
-        runtime = std::make_unique<elem::Runtime<float>>(lastKnownSampleRate, lastKnownBlockSize);
+        elementaryRuntime = std::make_unique<elem::Runtime<float>>(lastKnownSampleRate, lastKnownBlockSize);
         initJavaScriptEngine();
+        runtimeSwapRequired.store(false);
     }
 
     // Next we iterate over the current parameter values to update our local state
@@ -254,9 +276,10 @@ void EffectsPluginProcessor::handleAsyncUpdate()
     }
 
     dispatchStateChange();
+    dispatchMIDI();
 }
 
-void EffectsPluginProcessor::initJavaScriptEngine()
+void MindfulMIDI::initJavaScriptEngine()
 {
     jsContext = choc::javascript::createQuickJSContext();
 
@@ -264,7 +287,7 @@ void EffectsPluginProcessor::initJavaScriptEngine()
     jsContext.registerFunction("__postNativeMessage__", [this](choc::javascript::ArgumentList args)
     {
         auto const batch = elem::js::parseJSON(args[0]->toString());
-        auto const rc = runtime->applyInstructions(batch);
+        auto const rc = elementaryRuntime->applyInstructions(batch);
 
         if (rc != elem::ReturnCode::Ok())
         {
@@ -353,12 +376,13 @@ void EffectsPluginProcessor::initJavaScriptEngine()
 })();
 )script";
 
-    auto expr = juce::String(kHydrateScript).replace("%", elem::js::serialize(elem::js::serialize(runtime->snapshot())))
+    auto expr = juce::String(kHydrateScript).replace("%", elem::js::serialize(
+                                                         elem::js::serialize(elementaryRuntime->snapshot())))
                                             .toStdString();
     jsContext.evaluateExpression(expr);
 }
 
-void EffectsPluginProcessor::dispatchStateChange()
+void MindfulMIDI::dispatchStateChange()
 {
     const auto* kDispatchScript = R"script(
 (function() {
@@ -391,7 +415,56 @@ void EffectsPluginProcessor::dispatchStateChange()
     jsContext.evaluateExpression(expr);
 }
 
-void EffectsPluginProcessor::dispatchError(std::string const& name, std::string const& message)
+//= MIDI out to WebView and jsContext
+void MindfulMIDI::dispatchMIDI()
+{
+    const uint32_t midiCount = midiFifoQueue.getUsedSlots();
+
+    elem::js::Array vec;
+
+    if (midiCount > 0)
+    {
+        IncomingMIDIEvent m;
+        while (midiFifoQueue.pop(m))
+        {
+            vec.push_back(elem::js::Value(m.message.toHexString()));
+        };
+    }
+
+   const auto serializedMidi = elem::js::serialize(vec);
+
+
+    const auto* kDispatchScript = R"script(
+    (function() {
+      if (typeof globalThis.__receiveMIDI__ !== 'function')
+        return false;
+
+      globalThis.__receiveMIDI__(%);
+      return true;
+    })();
+    )script";
+
+    // Need the double serialize here to correctly form the string script. The first
+    // serialize produces the payload we want, the second serialize ensures we can replace
+    // the % character in the above script block and produce a valid javascript expression.
+
+    const auto expr = juce::String(kDispatchScript).replace("%", elem::js::serialize(elem::js::serialize(serializedMidi))).
+                                              toStdString();
+
+    // First we try to dispatch to the UI if it's available, because running this step will
+    // just involve placing a message in a queue.
+    if (const auto* editor = dynamic_cast<WebViewEditor*>(getActiveEditor()))
+    {
+        editor->getWebViewPtr()->evaluateJavascript(expr);
+    }
+
+    // Next we dispatch to the local engine which will evaluate any necessary JavaScript synchronously
+    // here on the main thread
+    jsContext.evaluateExpression(expr);
+}
+
+
+void MindfulMIDI::dispatchError(std::string const& name, std::string const& message)
 {
     const auto* kDispatchScript = R"script(
 (function() {
@@ -423,13 +496,13 @@ void EffectsPluginProcessor::dispatchError(std::string const& name, std::string 
 }
 
 //==============================================================================
-void EffectsPluginProcessor::getStateInformation(juce::MemoryBlock& destData)
+void MindfulMIDI::getStateInformation(juce::MemoryBlock& destData)
 {
     auto serialized = elem::js::serialize(state);
     destData.replaceAll((void*)serialized.c_str(), serialized.size());
 }
 
-void EffectsPluginProcessor::setStateInformation(const void* data, int sizeInBytes)
+void MindfulMIDI::setStateInformation(const void* data, int sizeInBytes)
 {
     try
     {
@@ -457,5 +530,5 @@ void EffectsPluginProcessor::setStateInformation(const void* data, int sizeInByt
 // This creates new instances of the plugin..
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new EffectsPluginProcessor();
+    return new MindfulMIDI();
 }

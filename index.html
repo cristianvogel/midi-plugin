@@ -3,10 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Elementary Effects Plugin</title>
+    <title>Mindful Harmony Plugin</title>
+
+    <style>
+      body {
+        margin: 2rem;
+        background-color: dimgray;
+        color: #ddd;
+        font-size: large;
+        font-family: Helvetica, Arial, sans-serif;
+        overflow: hidden; /* disable scrolling / rubberband effect on mobile */
+        height: 100vh;
+      }
+
+      * {
+        /* disable on touch highlights of html elements, especially on mobile! */
+        -webkit-tap-highlight-color: transparent;
+        -webkit-user-select: none; /* Safari */
+        user-select: none;
+      }
+    </style>
+
+
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+  <div id="app"></div>
+  <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

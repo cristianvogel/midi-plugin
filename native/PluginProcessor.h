@@ -5,19 +5,23 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include <choc_javascript.h>
+#include <choc_javascript_Console.h>
+#include <choc_HighResolutionSteadyClock.h>
+#include <choc_MIDI.h>
+#include <choc_SingleReaderSingleWriterFIFO.h>
 #include <elem/Runtime.h>
 
 
 //==============================================================================
-class EffectsPluginProcessor : public juce::AudioProcessor,
+class MindfulMIDI : public juce::AudioProcessor,
                                public juce::AudioProcessorParameter::Listener,
                                private juce::AsyncUpdater
 
 {
 public:
     //==============================================================================
-    EffectsPluginProcessor();
-    ~EffectsPluginProcessor() override;
+    MindfulMIDI();
+    ~MindfulMIDI() override;
 
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;
@@ -67,8 +71,24 @@ public:
     void dispatchStateChange();
     void dispatchError(std::string const& name, std::string const& message);
 
+    //=== MIDI business
+    void dispatchMIDI( );
+
 private:
+    //=== MIDI business
+    using MIDIClock = choc::HighResolutionSteadyClock;
+    struct IncomingMIDIEvent
+    {
+        MIDIClock::time_point time;
+        choc::midi::ShortMessage message;
+    };
+    choc::fifo::SingleReaderSingleWriterFIFO<IncomingMIDIEvent> midiFifoQueue;
+
+
+
+
     //==============================================================================
+    std::atomic<bool> runtimeSwapRequired{false};
     std::atomic<bool> shouldInitialize { false };
     double lastKnownSampleRate = 0;
     int lastKnownBlockSize = 0;
@@ -78,7 +98,7 @@ private:
 
     juce::AudioBuffer<float> scratchBuffer;
 
-    std::unique_ptr<elem::Runtime<float>> runtime;
+    std::unique_ptr<elem::Runtime<float>> elementaryRuntime;
 
     //==============================================================================
     // A simple "dirty list" abstraction here for propagating realtime parameter
@@ -92,6 +112,6 @@ private:
     static_assert(std::atomic<ParameterReadout>::is_always_lock_free);
 
     //==============================================================================
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EffectsPluginProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MindfulMIDI)
 };
 #endif //PLUGINPROCESSOR_H
