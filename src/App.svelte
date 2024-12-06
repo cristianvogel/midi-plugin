@@ -42,7 +42,7 @@
 
 {#if log.length}
     <div class="ui-console">
-        {@html log }
+        Message from JSContext: {@html log }
     </div>
 {/if}
 <style>

@@ -25,3 +25,18 @@ export function isValidMidiHex(hexString: string): boolean {
     const pattern = /^([0-9A-Fa-f]{2}\s){2}[0-9A-Fa-f]{2}$/;
     return pattern.test(hexString);
 }
+
+/*  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ *  generate some random midi notes
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ */
+export function generateMIDIMessage(): string {
+    // Generate a random MIDI note between 21 (A0) and 108 (C8) inclusive
+    const note = Math.floor(Math.random() * (70 - 40 + 1)) + 40;
+
+    // Generate a random velocity between 1 (min velocity) and 127 (max velocity) inclusive
+    const velocity = 60;
+
+    // Convert to hexadecimal and format the message
+    return `90 ${note.toString(16).toUpperCase()} ${velocity.toString(16).toUpperCase()}`;
+}

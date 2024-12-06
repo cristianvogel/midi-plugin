@@ -76,9 +76,9 @@ juce::AudioProcessorEditor* MindfulMIDI::createEditor()
 {
     editor = new WebViewEditor(this, util::getAssetsDirectory(), 800, 500);
 
-    editor->setMidiOut = [this]( const std::string& message, const int index )
+    editor->setMidiOut = [this](const std::string& message, const int index)
     {
-        handleMidiOut( message, index);
+        handleMidiOut(message, index);
     };
 
     editor->ready = [this]()
@@ -92,9 +92,9 @@ juce::AudioProcessorEditor* MindfulMIDI::createEditor()
     // When setting a parameter value, we simply tell the host. This will in turn fire
     // a parameterValueChanged event, which will catch and propagate through dispatching
     // a state change event
-    editor->setParameterValue = [this](const std::string &paramId, float value)
+    editor->setParameterValue = [this](const std::string& paramId, float value)
     {
-        if (parameterMap.contains(paramId) )
+        if (parameterMap.contains(paramId))
         {
             parameterMap[paramId]->setValueNotifyingHost(value);
         }
@@ -267,7 +267,7 @@ void MindfulMIDI::handleMidiOut(const std::string& _msg, int index)
     juce::StringArray bytes;
     bytes.addTokens(msg, " ", "\"");
     std::vector<uint8_t> uint8_bytes;
-     for (auto& byte : bytes)
+    for (auto& byte : bytes)
     {
         uint8_bytes.push_back(byte.getHexValue32());
     }
@@ -275,11 +275,12 @@ void MindfulMIDI::handleMidiOut(const std::string& _msg, int index)
     if (uint8_bytes.size() == 3)
     {
         const choc::midi::ShortMessage messageOut(uint8_bytes[0], uint8_bytes[1], uint8_bytes[2]);
-        midi_out_fifo_queue.push({messageOut, index}); // Add MIDI event to the queue
-        dispatchLogToUI("MIDI Out > [ " + std::to_string(uint8_bytes[0]) + ","
-            + std::to_string(uint8_bytes[1]) + ","
-            +  std::to_string(uint8_bytes[2]) + " ]" );
-
+        if (midi_out_fifo_queue.push({messageOut, index}))
+        {
+            dispatchLogToUI("MIDI Out > [ " + std::to_string(uint8_bytes[0]) + ","
+                + std::to_string(uint8_bytes[1]) + ","
+                + std::to_string(uint8_bytes[2]) + " ]");
+        }
     }
     else
     {
@@ -344,6 +345,10 @@ void MindfulMIDI::handleAsyncUpdate()
 void MindfulMIDI::initJavaScriptEngine()
 {
     jsContext = choc::javascript::createQuickJSContext();
+
+    // initialise the fifos for midi messages
+    midi_in_fifo_queue.reset( 100 );
+    midi_out_fifo_queue.reset( 100 );
 
     // Install some native interop functions in our JavaScript environment
     jsContext.registerFunction("__postNativeMessage__", [this](choc::javascript::ArgumentList args)
@@ -463,16 +468,17 @@ void MindfulMIDI::dispatchStateChange()
 
 //= Extended logging , so we can post debug messages directly in
 //= the plugin UI.
-void MindfulMIDI::dispatchLogToUI( const std::string& text )
+void MindfulMIDI::dispatchLogToUI(const std::string& text)
 {
     const auto* kDispatchScript = jsFunctions::logToViewScript;
     if (const auto* editor = dynamic_cast<WebViewEditor*>(getActiveEditor()))
     {
         const auto wrappedText = choc::value::createString(text);
-        const auto expr = serialize( kDispatchScript, wrappedText, "%");
+        const auto expr = serialize(kDispatchScript, wrappedText, "%");
         editor->getWebViewPtr()->evaluateJavascript(expr);
     }
 }
+
 //= MIDI out to WebView and jsContext
 void MindfulMIDI::dispatchMIDItoJS()
 {
@@ -539,7 +545,7 @@ void MindfulMIDI::dispatchError(std::string const& name, std::string const& mess
  * @brief Serialize data for js
  */
 std::string MindfulMIDI::serialize(const std::string& function, const elem::js::Object& data,
-                                              const juce::String& replacementChar)
+                                   const juce::String& replacementChar)
 {
     return juce::String(function)
            .replace(replacementChar, elem::js::serialize(elem::js::serialize(data)))
@@ -547,10 +553,11 @@ std::string MindfulMIDI::serialize(const std::string& function, const elem::js::
 }
 
 std::string MindfulMIDI::serialize(const std::string& function, const choc::value::Value& data,
-                                              const juce::String& replacementChar)
+                                   const juce::String& replacementChar)
 {
     return juce::String(function).replace(replacementChar, choc::json::toString(data)).toStdString();
 }
+
 //==============================================================================
 void MindfulMIDI::getStateInformation(juce::MemoryBlock& destData)
 {

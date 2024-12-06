@@ -1,27 +1,27 @@
 <script lang="ts">
 
     import {NativeMessage} from "../lib/NativeMessage.svelte";
+    import {generateMIDIMessage} from "../utils/helpers";
 
     let midiMessage = $state("00 00 00");
     let log = $state("")
 
-    const testArray = [
-        "90 3C 50",  // C4 (Middle C) at velocity 80
-        "90 3D 52",  // C#4 at velocity 82
-        "90 3E 54",  // D4 at velocity 84
-        "90 3F 56",  // D#4 at velocity 86
+    const testChord = [
+        "90 3C 50",
+        "90 3F 52",
+        "90 3A 54",
+        "90 2F 56",
     ];
 
     function testOneByOne() {
-        testArray.forEach(function (msg, index) {
-            NativeMessage.sendMIDI([msg]);
-            log += `${msg} sent.\n `
-        });
+        let randomNote: string = generateMIDIMessage();
+        NativeMessage.sendMIDI( [ randomNote ] )
+        log += `${randomNote} sent.\n `
     }
 
     function testAllAtOnce() {
-        NativeMessage.sendMIDI(testArray);
-        log = "Sent test array of " + testArray.length + " messages."
+        NativeMessage.sendMIDI(testChord);
+        log = "Sent test array of " + testChord.length + " messages.\n"
     }
 
 </script>
