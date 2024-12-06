@@ -183,6 +183,7 @@ void MindfulMIDI::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffe
 {
     juce::ScopedNoDenormals noDenormals;
 
+
     // Process all MIDI first
     auto now = MIDIClock::now();
 
@@ -205,17 +206,20 @@ void MindfulMIDI::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffe
         );
     }
 
-    // not sure if this needs to be handled like a runtime swap
-    // observing...
+    // not sure if this needs to be handled with a runtimeSwapRequired flag
     if(!midiMessages.isEmpty() ) {
         for (const auto metadata : midiMessages) {
             auto bytes = metadata.getMessage().getRawData();
             auto m = choc::midi::ShortMessage (bytes[0], bytes[1], bytes[2]);
-            midiFifoQueue.push({ now, m });
+            midi_in_fifo_queue.push({ now, m });
         }
-
         triggerAsyncUpdate();
     }
+    // We will re-assign to the MIDI buffer inside the process block,
+    // as whatever is assigned at this point, will be sent as MIDI out
+    // from the plug in
+    midiMessages.clear();
+
 
     if (runtimeSwapRequired)
     {
@@ -224,11 +228,31 @@ void MindfulMIDI::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffe
     }
 }
 
+void MindfulMIDI::midiMessageReceived( const std::string& _msg, int index )
+{
+    // Split the string into three-two digit strings and parse from hex to unit8 bytes
+    const juce::String msg(_msg);
+    juce::StringArray bytes;
+    bytes.addTokens (msg, " ", "\"");
+    std::vector<uint8_t> uint8_bytes;
+
+    for (auto &byte : bytes)
+    {
+        uint8_bytes.push_back( byte.getHexValue32() );
+    }
+    // This shuold be a standard MIDI note on message
+    if ( uint8_bytes.size() == 3 )
+    {
+        choc::midi::ShortMessage messageOut( uint8_bytes[0], uint8_bytes[1], uint8_bytes[2] );
+        midi_out_fifo_queue.push( { messageOut, index } );    // Add MIDI event to the queue
+    }
+
+}
+
 void MindfulMIDI::parameterValueChanged(int parameterIndex, float newValue)
 {
     // Mark the updated parameter value in the dirty list
     auto& pr = *std::next(paramReadouts.begin(), parameterIndex);
-
     pr.store({newValue, true});
     triggerAsyncUpdate();
 }
@@ -276,7 +300,7 @@ void MindfulMIDI::handleAsyncUpdate()
     }
 
     dispatchStateChange();
-    dispatchMIDI();
+    dispatchMIDItoJS();
 }
 
 void MindfulMIDI::initJavaScriptEngine()
@@ -416,16 +440,16 @@ void MindfulMIDI::dispatchStateChange()
 }
 
 //= MIDI out to WebView and jsContext
-void MindfulMIDI::dispatchMIDI()
+void MindfulMIDI::dispatchMIDItoJS()
 {
-    const uint32_t midiCount = midiFifoQueue.getUsedSlots();
+    const uint32_t midiCount = midi_in_fifo_queue.getUsedSlots();
 
     elem::js::Array vec;
 
     if (midiCount > 0)
     {
         IncomingMIDIEvent m;
-        while (midiFifoQueue.pop(m))
+        while (midi_in_fifo_queue.pop(m))
         {
             vec.push_back(elem::js::Value(m.message.toHexString()));
         };

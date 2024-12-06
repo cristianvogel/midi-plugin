@@ -34,6 +34,7 @@ public:
     bool isBusesLayoutSupported (const juce::AudioProcessor::BusesLayout& layouts) const override;
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void midiMessageReceived(const std::string& _msg, int index);
 
     //==============================================================================
     const juce::String getName() const override;
@@ -72,17 +73,26 @@ public:
     void dispatchError(std::string const& name, std::string const& message);
 
     //=== MIDI business
-    void dispatchMIDI( );
+    void dispatchMIDItoJS( );
 
 private:
     //=== MIDI business
     using MIDIClock = choc::HighResolutionSteadyClock;
+
     struct IncomingMIDIEvent
     {
         MIDIClock::time_point time;
         choc::midi::ShortMessage message;
     };
-    choc::fifo::SingleReaderSingleWriterFIFO<IncomingMIDIEvent> midiFifoQueue;
+
+    struct OutgoingMIDIEvent
+    {
+        //MIDIClock::time_point time;
+        choc::midi::ShortMessage message;
+        int index = 0;
+    };
+    choc::fifo::SingleReaderSingleWriterFIFO<IncomingMIDIEvent> midi_in_fifo_queue;
+    choc::fifo::SingleReaderSingleWriterFIFO<OutgoingMIDIEvent> midi_out_fifo_queue;
 
 
 
