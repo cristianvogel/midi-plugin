@@ -1,9 +1,9 @@
-/* ━━━━ NativeMessage.ts ━━━━━━━━━━
+/*  NativeMessage.ts 
  *  This code sets up the handlers for receiving messages and sending
  *  messages between the UI layer and the backend native code.
  *
  *  These observers will be destroyed when the UI is closed.
- * ━━━━━━━━━━━━━━
+ * 
  */
 
 import {IncomingMIDI} from "../state/customState.svelte"
@@ -26,15 +26,15 @@ function processHostState(state: any) {
 
 }
 
-/* ━━━ RegisterMessagesFromHost ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+/*  RegisterMessagesFromHost 
  * Register the message handlers for receiving and processing messages from the host.
  * This function sets up global functions that handle state changes, mesh state changes,
  * license activation, error handling, and host information.
- * ━━━━━━━━━━━━━━
+ * 
  */
 
 export function RegisterMessagesFromHost() {
-    /* ━━━━━━━━━━━━━━
+    /* 
      * Handles the state change received from the host.
      * @param state - The host state change object.
      */
@@ -42,7 +42,7 @@ export function RegisterMessagesFromHost() {
         processHostState(state);
     };
 
-    /* ━━━━━━━━━━━━━━
+    /* 
      * Handles incoming MIDI data
      */
     globalThis.__receiveMIDI__ = function (data: any) {
@@ -55,7 +55,7 @@ export function RegisterMessagesFromHost() {
         }
     };
 
-    /* ━━━━━━━━━━━━━━
+    /* 
      * DEV ONLY: Handles logging and errors
      */
     globalThis.__receiveError__ = function (error: any) {
@@ -71,14 +71,14 @@ export function RegisterMessagesFromHost() {
 
 
 
-/* ━━━━ RegisterMessagesToHost ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+/*  NativeMessage 
 * Register messages to the back end from the UI, such as the 'requestReady' init call
 * and of course a means of updating host params from the UI via updateHost.
-* ━━━━━━━━━━━━━━
+* 
 */
-export const RegisterMessagesToHost = {
+export const NativeMessage = {
 
-    /** ━━━━━━━
+    /** 
      * Update a paramID to a new value in the host
      */
     setParameterValue: function (paramId: string, value: number) {
@@ -89,7 +89,7 @@ export const RegisterMessagesToHost = {
             });
         }
     },
-    /** ━━━━━━━
+    /** 
      * Send MIDI three byte messages from the plugin
      * @param messages eg: [ "90 3C 64", "80 4b 7f" ... ]
      * Posts all the messages passed by the array and an index
@@ -110,7 +110,7 @@ export const RegisterMessagesToHost = {
         }
     },
 
-    /** ━━━━━━━
+    /** 
      * Send a ready message to the host.
      */
     requestReady: function () {
@@ -120,7 +120,7 @@ export const RegisterMessagesToHost = {
     },
 
 
-    /** ━━━━━━━
+    /** 
      * Hot reload the DSP during development.
      */
     __bindHotReload: function () {

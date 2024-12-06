@@ -1,27 +1,11 @@
+// ReSharper disable CppTooWideScopeInitStatement
 #include "PluginProcessor.h"
 #include "WebViewEditor.h"
 
 #include <choc_javascript_QuickJS.h>
 
+#include "Helpers.h"
 
-//==============================================================================
-// A quick helper for locating bundled asset files
-juce::File getAssetsDirectory()
-{
-#if JUCE_MAC
-    auto assetsDir = juce::File::getSpecialLocation(juce::File::SpecialLocationType::currentApplicationFile)
-        .getChildFile("Contents/Resources/dist");
-#elif JUCE_WINDOWS
-    auto assetsDir = juce::File::getSpecialLocation(juce::File::SpecialLocationType::currentExecutableFile) // Plugin.vst3/Contents/<arch>/Plugin.vst3
-        .getParentDirectory()  // Plugin.vst3/Contents/<arch>/
-        .getParentDirectory()  // Plugin.vst3/Contents/
-        .getChildFile("Resources/dist");
-#else
-#error "We only support Mac and Windows here yet."
-#endif
-
-    return assetsDir;
-}
 
 //==============================================================================
 MindfulMIDI::MindfulMIDI()
@@ -35,7 +19,7 @@ MindfulMIDI::MindfulMIDI()
     auto manifestFile = juce::URL("http://localhost:5173/manifest.json");
     auto manifestFileContents = manifestFile.readEntireTextStream().toStdString();
 #else
-    auto manifestFile = getAssetsDirectory().getChildFile("manifest.json");
+    auto manifestFile = util::getAssetsDirectory().getChildFile("manifest.json");
 
     if (!manifestFile.existsAsFile())
         return;
@@ -90,7 +74,45 @@ MindfulMIDI::~MindfulMIDI()
 //==============================================================================
 juce::AudioProcessorEditor* MindfulMIDI::createEditor()
 {
-    return new WebViewEditor(this, getAssetsDirectory(), 800, 500);
+    editor = new WebViewEditor(this, util::getAssetsDirectory(), 800, 500);
+
+    editor->setMidiOut = [this]( const std::string& message, const int index )
+    {
+        handleMidiOut( message, index);
+    };
+
+    editor->ready = [this]()
+    {
+        dispatchStateChange();
+    };
+
+    // When setting a parameter value, we simply tell the host. This will in turn
+    // fire a parameterValueChanged event, which will catch and propagate through
+    // dispatching a state change event
+    editor->setParameterValue = [this](const std::string& paramId, float value)
+    {
+        if (parameterMap.contains(paramId))
+        {
+            [this, value](auto&& param)
+                {
+                    param->beginChangeGesture();
+                    param->setValueNotifyingHost(value);
+                    param->endChangeGesture();
+                },
+                parameterMap[paramId];
+        }
+    };
+
+#if ELEM_DEV_LOCALHOST
+    editor->reload = [this]()
+    {
+        initJavaScriptEngine();
+        dispatchStateChange();
+    };
+
+#endif
+
+    return editor;
 }
 
 bool MindfulMIDI::hasEditor() const
@@ -179,7 +201,7 @@ bool MindfulMIDI::isBusesLayoutSupported(const AudioProcessor::BusesLayout& layo
     return true;
 }
 
-void MindfulMIDI::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages )
+void MindfulMIDI::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
 
@@ -188,30 +210,32 @@ void MindfulMIDI::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffe
     auto now = MIDIClock::now();
 
     // Copy the input so that our input and output buffers are distinct
-    scratchBuffer.makeCopyOf(buffer, true);
+    // scratchBuffer.makeCopyOf(buffer, true);
 
     // Clear the output buffer to prevent any garbage if our runtime isn't ready
-    buffer.clear();
+    // buffer.clear();
 
     // Process the elementary runtime
-    if (elementaryRuntime != nullptr && !runtimeSwapRequired)
-    {
-        elementaryRuntime->process(
-            const_cast<const float**>(scratchBuffer.getArrayOfWritePointers()),
-            getTotalNumInputChannels(),
-            const_cast<float**>(buffer.getArrayOfWritePointers()),
-            buffer.getNumChannels(),
-            buffer.getNumSamples(),
-            nullptr
-        );
-    }
+    // if (elementaryRuntime != nullptr && !runtimeSwapRequired)
+    // {
+    //     elementaryRuntime->process(
+    //         const_cast<const float**>(scratchBuffer.getArrayOfWritePointers()),
+    //         getTotalNumInputChannels(),
+    //         const_cast<float**>(buffer.getArrayOfWritePointers()),
+    //         buffer.getNumChannels(),
+    //         buffer.getNumSamples(),
+    //         nullptr
+    //     );
+    // }
 
     // not sure if this needs to be handled with a runtimeSwapRequired flag
-    if(!midiMessages.isEmpty() ) {
-        for (const auto metadata : midiMessages) {
-            auto bytes = metadata.getMessage().getRawData();
-            auto m = choc::midi::ShortMessage (bytes[0], bytes[1], bytes[2]);
-            midi_in_fifo_queue.push({ now, m });
+    if (!midiMessages.isEmpty())
+    {
+        for (const auto metadata : midiMessages)
+        {
+            const auto bytes = metadata.getMessage().getRawData();
+            const auto m = choc::midi::ShortMessage(bytes[0], bytes[1], bytes[2]);
+            midi_in_fifo_queue.push({now, m});
         }
         triggerAsyncUpdate();
     }
@@ -219,8 +243,20 @@ void MindfulMIDI::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffe
     // as whatever is assigned at this point, will be sent as MIDI out
     // from the plug in
     midiMessages.clear();
+    const uint32_t midiCount = midi_in_fifo_queue.getUsedSlots();
+
+    if (midiCount > 0)
+    {
+        OutgoingMIDIEvent m;
+        while (midi_out_fifo_queue.pop(m))
+        {
+            juce::MidiMessage messageOut{m.message.data, m.message.length()};
+            midiMessages.addEvent(messageOut, m.index);
+        };
+    }
 
 
+    // Elementary needed a runtime swap
     if (runtimeSwapRequired)
     {
         shouldInitialize.store(true);
@@ -228,25 +264,28 @@ void MindfulMIDI::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffe
     }
 }
 
-void MindfulMIDI::midiMessageReceived( const std::string& _msg, int index )
+void MindfulMIDI::handleMidiOut(const std::string& _msg, int index)
 {
     // Split the string into three-two digit strings and parse from hex to unit8 bytes
     const juce::String msg(_msg);
     juce::StringArray bytes;
-    bytes.addTokens (msg, " ", "\"");
+    bytes.addTokens(msg, " ", "\"");
     std::vector<uint8_t> uint8_bytes;
 
-    for (auto &byte : bytes)
+    for (auto& byte : bytes)
     {
-        uint8_bytes.push_back( byte.getHexValue32() );
+        uint8_bytes.push_back(byte.getHexValue32());
     }
     // This shuold be a standard MIDI note on message
-    if ( uint8_bytes.size() == 3 )
+    if (uint8_bytes.size() == 3)
     {
-        choc::midi::ShortMessage messageOut( uint8_bytes[0], uint8_bytes[1], uint8_bytes[2] );
-        midi_out_fifo_queue.push( { messageOut, index } );    // Add MIDI event to the queue
+        const choc::midi::ShortMessage messageOut(uint8_bytes[0], uint8_bytes[1], uint8_bytes[2]);
+        midi_out_fifo_queue.push({messageOut, index}); // Add MIDI event to the queue
     }
-
+    else
+    {
+        dispatchError("MIDI Error", "Message was not a 3 byte message.");
+    }
 }
 
 void MindfulMIDI::parameterValueChanged(int parameterIndex, float newValue)
@@ -455,7 +494,7 @@ void MindfulMIDI::dispatchMIDItoJS()
         };
     }
 
-   const auto serializedMidi = elem::js::serialize(vec);
+    const auto serializedMidi = elem::js::serialize(vec);
 
 
     const auto* kDispatchScript = R"script(
@@ -472,8 +511,9 @@ void MindfulMIDI::dispatchMIDItoJS()
     // serialize produces the payload we want, the second serialize ensures we can replace
     // the % character in the above script block and produce a valid javascript expression.
 
-    const auto expr = juce::String(kDispatchScript).replace("%", elem::js::serialize(elem::js::serialize(serializedMidi))).
-                                              toStdString();
+    const auto expr = juce::String(kDispatchScript).replace("%", elem::js::serialize(
+                                                                elem::js::serialize(serializedMidi))).
+                                                    toStdString();
 
     // First we try to dispatch to the UI if it's available, because running this step will
     // just involve placing a message in a queue.

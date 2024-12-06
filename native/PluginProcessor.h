@@ -11,11 +11,13 @@
 #include <choc_SingleReaderSingleWriterFIFO.h>
 #include <elem/Runtime.h>
 
+// Forward Declarations
+class WebViewEditor;
 
 //==============================================================================
-class MindfulMIDI : public juce::AudioProcessor,
-                               public juce::AudioProcessorParameter::Listener,
-                               private juce::AsyncUpdater
+class MindfulMIDI final : public juce::AudioProcessor,
+                          public juce::AudioProcessorParameter::Listener,
+                          private juce::AsyncUpdater
 
 {
 public:
@@ -26,7 +28,7 @@ public:
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override;
-
+    WebViewEditor* editor = nullptr;
     //==============================================================================
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -34,7 +36,7 @@ public:
     bool isBusesLayoutSupported (const juce::AudioProcessor::BusesLayout& layouts) const override;
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
-    void midiMessageReceived(const std::string& _msg, int index);
+    void handleMidiOut(const std::string& _msg, int index);
 
     //==============================================================================
     const juce::String getName() const override;
@@ -109,6 +111,8 @@ private:
     juce::AudioBuffer<float> scratchBuffer;
 
     std::unique_ptr<elem::Runtime<float>> elementaryRuntime;
+
+    std::map<std::string, juce::AudioParameterFloat*> parameterMap;
 
     //==============================================================================
     // A simple "dirty list" abstraction here for propagating realtime parameter
