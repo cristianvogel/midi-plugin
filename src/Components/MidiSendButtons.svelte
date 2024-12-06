@@ -46,7 +46,7 @@
         border-radius: 5px;
         overflow-y: auto;
         width: 20%;
-        height: 200px; /* Adjust as necessary */
+        height: 100px; /* Adjust as necessary */
         font-family: 'Courier New', Courier, monospace;
         font-size: x-small;
         white-space: pre-line; /* Keeps the formatted text look (like in `<pre>`), but wraps text */

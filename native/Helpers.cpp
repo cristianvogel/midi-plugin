@@ -3,16 +3,17 @@
 //
 
 //======= HELPERS ==============================
- // A helper for locating bundled asset files
+// A helper for locating bundled asset files
 
 #include "Helpers.h"
-#include <elem/Value.h>
 
- juce::File getAssetsDirectory()
- {
+namespace util
+{
+    juce::File getAssetsDirectory()
+    {
 #if JUCE_MAC
-     auto assetsDir = juce::File::getSpecialLocation(juce::File::SpecialLocationType::currentApplicationFile)
-                          .getChildFile("Contents/Resources/dist");
+        auto assetsDir = juce::File::getSpecialLocation(juce::File::SpecialLocationType::currentApplicationFile)
+            .getChildFile("Contents/Resources/dist");
 #elif JUCE_WINDOWS
      auto assetsDir =
          juce::File::getSpecialLocation(
@@ -24,5 +25,6 @@
 #error "We only support Mac and Windows here yet."
 #endif
 
-     return assetsDir;
- }
+        return assetsDir;
+    }
+} // end util

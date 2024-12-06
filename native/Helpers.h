@@ -5,7 +5,6 @@
 #ifndef HELPERS_H
 #define HELPERS_H
 
-#include <elem/Value.h>
 #include <juce_audio_basics/juce_audio_basics.h>
 
 namespace util

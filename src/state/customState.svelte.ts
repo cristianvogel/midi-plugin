@@ -28,7 +28,37 @@ function rawMIDI(initial: string[]) {
     };
 }
 
+// Better logging direct to UI
+export const UIConsole = consoleText("");
+function consoleText(initial: string) {
+    let current = $state(initial);
+    let extended = $state(initial);
 
+    return {
+        get current(): string {
+            return current;
+        },
+        update(newValues: string) {
+            // after 3 seconds , reset the console text
+            setTimeout(() => {
+                current = "";
+            }, 3000);
+            current = newValues;
+        },
+        get snapshot() {
+            return $state.snapshot(current);
+        },
+        extend(newText: string) {
+            setTimeout(() => {
+                current = "";
+            }, 2000);
+            current = ( extended + newText );
+        },
+        get extended() {
+            return extended;
+        }
+    };
+}
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━

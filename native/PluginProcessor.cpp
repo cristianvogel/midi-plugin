@@ -89,17 +89,14 @@ juce::AudioProcessorEditor* MindfulMIDI::createEditor()
     // When setting a parameter value, we simply tell the host. This will in turn
     // fire a parameterValueChanged event, which will catch and propagate through
     // dispatching a state change event
-    editor->setParameterValue = [this](const std::string& paramId, float value)
+    // When setting a parameter value, we simply tell the host. This will in turn fire
+    // a parameterValueChanged event, which will catch and propagate through dispatching
+    // a state change event
+    editor->setParameterValue = [this](const std::string &paramId, float value)
     {
-        if (parameterMap.contains(paramId))
+        if (parameterMap.contains(paramId) )
         {
-            [this, value](auto&& param)
-                {
-                    param->beginChangeGesture();
-                    param->setValueNotifyingHost(value);
-                    param->endChangeGesture();
-                },
-                parameterMap[paramId];
+            parameterMap[paramId]->setValueNotifyingHost(value);
         }
     };
 
@@ -243,9 +240,8 @@ void MindfulMIDI::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffe
     // as whatever is assigned at this point, will be sent as MIDI out
     // from the plug in
     midiMessages.clear();
-    const uint32_t midiCount = midi_in_fifo_queue.getUsedSlots();
 
-    if (midiCount > 0)
+    if (midi_out_fifo_queue.getUsedSlots() > 0)
     {
         OutgoingMIDIEvent m;
         while (midi_out_fifo_queue.pop(m))
@@ -271,8 +267,7 @@ void MindfulMIDI::handleMidiOut(const std::string& _msg, int index)
     juce::StringArray bytes;
     bytes.addTokens(msg, " ", "\"");
     std::vector<uint8_t> uint8_bytes;
-
-    for (auto& byte : bytes)
+     for (auto& byte : bytes)
     {
         uint8_bytes.push_back(byte.getHexValue32());
     }
@@ -281,10 +276,14 @@ void MindfulMIDI::handleMidiOut(const std::string& _msg, int index)
     {
         const choc::midi::ShortMessage messageOut(uint8_bytes[0], uint8_bytes[1], uint8_bytes[2]);
         midi_out_fifo_queue.push({messageOut, index}); // Add MIDI event to the queue
+        dispatchLogToUI("MIDI Out > [ " + std::to_string(uint8_bytes[0]) + ","
+            + std::to_string(uint8_bytes[1]) + ","
+            +  std::to_string(uint8_bytes[2]) + " ]" );
+
     }
     else
     {
-        dispatchError("MIDI Error", "Message was not a 3 byte message.");
+        dispatchLogToUI("MIDI Error: Message was not a 3 byte message.");
     }
 }
 
@@ -419,7 +418,7 @@ void MindfulMIDI::initJavaScriptEngine()
     auto dspEntryFile = juce::URL("http://localhost:5173/dsp.main.js");
     auto dspEntryFileContents = dspEntryFile.readEntireTextStream().toStdString();
 #else
-    auto dspEntryFile = getAssetsDirectory().getChildFile("dsp.main.js");
+    auto dspEntryFile = util::getAssetsDirectory().getChildFile("dsp.main.js");
 
     if (!dspEntryFile.existsAsFile())
         return;
@@ -429,15 +428,7 @@ void MindfulMIDI::initJavaScriptEngine()
     jsContext.evaluateExpression(dspEntryFileContents);
 
     // Re-hydrate from current state
-    const auto* kHydrateScript = R"script(
-(function() {
-  if (typeof globalThis.__receiveHydrationData__ !== 'function')
-    return false;
-
-  globalThis.__receiveHydrationData__(%);
-  return true;
-})();
-)script";
+    const auto* kHydrateScript = jsFunctions::hydrateScript;
 
     auto expr = juce::String(kHydrateScript).replace("%", elem::js::serialize(
                                                          elem::js::serialize(elementaryRuntime->snapshot())))
@@ -447,15 +438,7 @@ void MindfulMIDI::initJavaScriptEngine()
 
 void MindfulMIDI::dispatchStateChange()
 {
-    const auto* kDispatchScript = R"script(
-(function() {
-  if (typeof globalThis.__receiveStateChange__ !== 'function')
-    return false;
-
-  globalThis.__receiveStateChange__(%);
-  return true;
-})();
-)script";
+    const auto* kDispatchScript = jsFunctions::receiveStateChangeScript;
 
     // Need the double serialize here to correctly form the string script. The first
     // serialize produces the payload we want, the second serialize ensures we can replace
@@ -478,6 +461,18 @@ void MindfulMIDI::dispatchStateChange()
     jsContext.evaluateExpression(expr);
 }
 
+//= Extended logging , so we can post debug messages directly in
+//= the plugin UI.
+void MindfulMIDI::dispatchLogToUI( const std::string& text )
+{
+    const auto* kDispatchScript = jsFunctions::logToViewScript;
+    if (const auto* editor = dynamic_cast<WebViewEditor*>(getActiveEditor()))
+    {
+        const auto wrappedText = choc::value::createString(text);
+        const auto expr = serialize( kDispatchScript, wrappedText, "%");
+        editor->getWebViewPtr()->evaluateJavascript(expr);
+    }
+}
 //= MIDI out to WebView and jsContext
 void MindfulMIDI::dispatchMIDItoJS()
 {
@@ -496,16 +491,7 @@ void MindfulMIDI::dispatchMIDItoJS()
 
     const auto serializedMidi = elem::js::serialize(vec);
 
-
-    const auto* kDispatchScript = R"script(
-    (function() {
-      if (typeof globalThis.__receiveMIDI__ !== 'function')
-        return false;
-
-      globalThis.__receiveMIDI__(%);
-      return true;
-    })();
-    )script";
+    const auto* kDispatchScript = jsFunctions::receiveMidiScript;
 
     // Need the double serialize here to correctly form the string script. The first
     // serialize produces the payload we want, the second serialize ensures we can replace
@@ -530,21 +516,10 @@ void MindfulMIDI::dispatchMIDItoJS()
 
 void MindfulMIDI::dispatchError(std::string const& name, std::string const& message)
 {
-    const auto* kDispatchScript = R"script(
-(function() {
-  if (typeof globalThis.__receiveError__ !== 'function')
-    return false;
-
-  let e = new Error(%);
-  e.name = @;
-
-  globalThis.__receiveError__(e);
-  return true;
-})();
-)script";
+    const auto* kDispatchScript = jsFunctions::errorScript;
 
     // Need the serialize here to correctly form the string script.
-    auto expr = juce::String(kDispatchScript).replace("@", elem::js::serialize(name)).replace(
+    const auto expr = juce::String(kDispatchScript).replace("@", elem::js::serialize(name)).replace(
         "%", elem::js::serialize(message)).toStdString();
 
     // First we try to dispatch to the UI if it's available, because running this step will
@@ -559,6 +534,23 @@ void MindfulMIDI::dispatchError(std::string const& name, std::string const& mess
     jsContext.evaluateExpression(expr);
 }
 
+/*▮▮js▮▮▮▮▮▮frontend▮▮▮▮▮▮backend▮▮▮▮▮▮messaging▮▮▮▮▮▮
+ * @name serialize
+ * @brief Serialize data for js
+ */
+std::string MindfulMIDI::serialize(const std::string& function, const elem::js::Object& data,
+                                              const juce::String& replacementChar)
+{
+    return juce::String(function)
+           .replace(replacementChar, elem::js::serialize(elem::js::serialize(data)))
+           .toStdString();
+}
+
+std::string MindfulMIDI::serialize(const std::string& function, const choc::value::Value& data,
+                                              const juce::String& replacementChar)
+{
+    return juce::String(function).replace(replacementChar, choc::json::toString(data)).toStdString();
+}
 //==============================================================================
 void MindfulMIDI::getStateInformation(juce::MemoryBlock& destData)
 {

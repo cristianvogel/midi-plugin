@@ -6,7 +6,7 @@
  * 
  */
 
-import {IncomingMIDI} from "../state/customState.svelte"
+import {IncomingMIDI, UIConsole} from "../state/customState.svelte"
 import {isValidMidiHex} from "../utils/helpers";
 export declare var globalThis: any;
 
@@ -67,6 +67,10 @@ export function RegisterMessagesFromHost() {
         //ConsoleText.set("Error: " + error);
         console.warn("PLUGIN:: ", log);
     };
+
+    globalThis.__receiveLog__ = function (text: string) {
+        UIConsole.extend( text )
+    }
 }
 
 

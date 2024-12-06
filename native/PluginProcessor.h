@@ -40,40 +40,37 @@ public:
 
     //==============================================================================
     const juce::String getName() const override;
-
     bool acceptsMidi() const override;
     bool producesMidi() const override;
     bool isMidiEffect() const override;
     double getTailLengthSeconds() const override;
-
     //==============================================================================
     int getNumPrograms() override;
     int getCurrentProgram() override;
     void setCurrentProgram (int index) override;
     const juce::String getProgramName (int index) override;
     void changeProgramName (int index, const juce::String& newName) override;
-
     //==============================================================================
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
-
     //==============================================================================
     /** Implement the AudioProcessorParameter::Listener interface. */
     void parameterValueChanged (int parameterIndex, float newValue) override;
     void parameterGestureChanged (int parameterIndex, bool gestureIsStarting) override;
-
     //==============================================================================
     /** Implement the AsyncUpdater interface. */
     void handleAsyncUpdate() override;
-
     //==============================================================================
     /** Internal helper for initializing the embedded JS engine. */
     void initJavaScriptEngine();
-
+    static std::string serialize(const std::string& function, const elem::js::Object& data,
+                      const juce::String& replacementChar = "%");
+    static std::string serialize(const std::string& function, const choc::value::Value& data,
+                          const juce::String& replacementChar = "%");
     /** Internal helper for propagating processor state changes. */
     void dispatchStateChange();
     void dispatchError(std::string const& name, std::string const& message);
-
+    void dispatchLogToUI( std::string const& text );
     //=== MIDI business
     void dispatchMIDItoJS( );
 
@@ -128,4 +125,82 @@ private:
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MindfulMIDI)
 };
+
+
+namespace jsFunctions
+{
+    inline auto receiveMidiScript = R"script(
+    (function() {
+      if (typeof globalThis.__receiveMIDI__ !== 'function')
+        return false;
+
+      globalThis.__receiveMIDI__(%);
+      return true;
+    })();
+    )script";
+
+    inline auto hydrateScript = R"script(
+(function() {
+  if (typeof globalThis.__receiveHydrationData__ !== 'function')
+    return false;
+
+  globalThis.__receiveHydrationData__(%);
+  return true;
+})();
+)script";
+
+    inline auto dispatchScript = R"script(
+(function() {
+  if (typeof globalThis.__receiveStateChange__ !== 'function')
+    return false;
+
+  globalThis.__receiveStateChange__(%);
+  return true;
+})();
+)script";
+
+    inline auto errorScript = R"script(
+(function() {
+  if (typeof globalThis.__receiveError__ !== 'function')
+    return false;
+
+  let e = new Error(%);
+  e.name = @;
+
+  globalThis.__receiveError__(e);
+  return true;
+})();
+)script";
+
+    inline auto logToViewScript = R"script(
+(function() {
+    if (typeof globalThis.__receiveLog__ !== 'function')
+        return false;
+
+    globalThis.__receiveLog__(%);
+    return true;
+    })();
+)script";
+
+inline auto receiveStateChangeScript =     R"script(
+(function() {
+  if (typeof globalThis.__receiveStateChange__ !== 'function')
+    return false;
+
+  globalThis.__receiveStateChange__(%);
+  return true;
+})();
+)script";
+
+    inline auto vfsKeysScript = R"script(
+(function() {
+    if (typeof globalThis.__receiveVFSKeys__ !== 'function')
+        return false;
+
+    globalThis.__receiveVFSKeys__(%);
+    return true;
+    })();
+)script";
+} // namespace jsFunctions
+
 #endif //PLUGINPROCESSOR_H
