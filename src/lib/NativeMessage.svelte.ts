@@ -1,12 +1,13 @@
-/* ━━━━ NativeMessage.ts ━━━━━━━━━━
+/*  NativeMessage.ts 
  *  This code sets up the handlers for receiving messages and sending
  *  messages between the UI layer and the backend native code.
  *
  *  These observers will be destroyed when the UI is closed.
- * ━━━━━━━━━━━━━━
+ * 
  */
 
-import {IncomingMIDI} from "../state/customState.svelte"
+import {IncomingMIDI, UIConsole} from "../state/customState.svelte"
+import {isValidMidiHex} from "../utils/helpers";
 export declare var globalThis: any;
 
 // ** processHostState
@@ -25,15 +26,15 @@ function processHostState(state: any) {
 
 }
 
-/* ━━━ RegisterMessagesFromHost ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+/*  RegisterMessagesFromHost 
  * Register the message handlers for receiving and processing messages from the host.
  * This function sets up global functions that handle state changes, mesh state changes,
  * license activation, error handling, and host information.
- * ━━━━━━━━━━━━━━
+ * 
  */
 
 export function RegisterMessagesFromHost() {
-    /* ━━━━━━━━━━━━━━
+    /* 
      * Handles the state change received from the host.
      * @param state - The host state change object.
      */
@@ -41,7 +42,7 @@ export function RegisterMessagesFromHost() {
         processHostState(state);
     };
 
-    /* ━━━━━━━━━━━━━━
+    /* 
      * Handles incoming MIDI data
      */
     globalThis.__receiveMIDI__ = function (data: any) {
@@ -54,7 +55,7 @@ export function RegisterMessagesFromHost() {
         }
     };
 
-    /* ━━━━━━━━━━━━━━
+    /* 
      * DEV ONLY: Handles logging and errors
      */
     globalThis.__receiveError__ = function (error: any) {
@@ -66,17 +67,25 @@ export function RegisterMessagesFromHost() {
         //ConsoleText.set("Error: " + error);
         console.warn("PLUGIN:: ", log);
     };
+
+    globalThis.__receiveLog__ = function (text: string) {
+        UIConsole.extend( text )
+    }
 }
 
 
 
-/* ━━━━ RegisterMessageToHost ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+/*  NativeMessage 
 * Register messages to the back end from the UI, such as the 'requestReady' init call
 * and of course a means of updating host params from the UI via updateHost.
-* ━━━━━━━━━━━━━━
+* 
 */
-export const RegisterMessageToHost = {
-    updateHost: function (paramId: string, value: number) {
+export const NativeMessage = {
+
+    /** 
+     * Update a paramID to a new value in the host
+     */
+    setParameterValue: function (paramId: string, value: number) {
         if (typeof globalThis.__postNativeMessage__ === "function") {
             globalThis.__postNativeMessage__("setParameterValue", {
                 paramId,
@@ -84,8 +93,28 @@ export const RegisterMessageToHost = {
             });
         }
     },
+    /** 
+     * Send MIDI three byte messages from the plugin
+     * @param messages eg: [ "90 3C 64", "80 4b 7f" ... ]
+     * Posts all the messages passed by the array and an index
+     * to keep track of an order of events
+     */
+    sendMIDI: function ( messages: Array<string> ) {
+        if (typeof globalThis.__postNativeMessage__ === "function") {
+            let index = 0;
+            for (let message of messages) {
+                if (isValidMidiHex(message)) {
+                    globalThis.__postNativeMessage__("sendMIDI", {
+                        message,
+                        index
+                    });
+                    index++;
+                }
+            }
+        }
+    },
 
-    /** ━━━━━━━
+    /** 
      * Send a ready message to the host.
      */
     requestReady: function () {
@@ -95,7 +124,7 @@ export const RegisterMessageToHost = {
     },
 
 
-    /** ━━━━━━━
+    /** 
      * Hot reload the DSP during development.
      */
     __bindHotReload: function () {
@@ -110,4 +139,6 @@ export const RegisterMessageToHost = {
             });
         }
     },
+
+
 };

@@ -55,7 +55,9 @@ endif ()
 target_sources(${TARGET_NAME}
         PRIVATE
         PluginProcessor.cpp
-        WebViewEditor.cpp)
+        WebViewEditor.cpp
+        Helpers.cpp
+)
 
 target_include_directories(${TARGET_NAME}
         PRIVATE
@@ -68,7 +70,7 @@ target_include_directories(${TARGET_NAME}
 
 target_compile_features(${TARGET_NAME}
         PRIVATE
-        cxx_std_17)
+        cxx_std_20)
 
 target_compile_definitions(${TARGET_NAME}
         PRIVATE
