@@ -21,8 +21,10 @@ public:
     void paint(juce::Graphics &g) override;
     void resized() override;
 
-
+    //======= general-purpose polymorphic function wrappers
+    //======= bound to the processor from the front end
     std::function<void(const std::string &, float)> setParameterValue = [](const std::string &, float) {};
+    std::function<void(const std::string &, int)> setMidiOut = [](const std::string &, int) {};
     std::function<void()> reload = []() {};
     std::function<void()> ready = []() {};
 
@@ -34,8 +36,10 @@ private:
     std::string RELOAD_EVENT = "reload";
     std::string SET_PARAMETER_VALUE = "setParameterValue";
     std::string SERVER_PORT = "serverInfo";
+    std::string SEND_MIDI_EVENT = "sendMIDI";
 
     choc::value::Value handleSetParameterValueEvent(const choc::value::ValueView &e) const;
+    choc::value::Value handleSetMidiOut(const choc::value::ValueView& e) const;
 
     std::unique_ptr<choc::ui::WebView> webView;
 

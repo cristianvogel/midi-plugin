@@ -90,6 +90,11 @@ WebViewEditor::WebViewEditor(juce::AudioProcessor *proc, juce::File const &asset
             if (eventName == SET_PARAMETER_VALUE && args.size() > 1) {
                 return handleSetParameterValueEvent(args[1]);
             }
+
+            if (eventName == SEND_MIDI_EVENT && args.size() > 1 )
+            {
+                return handleSetMidiOut(args[1]);
+            }
         }
 
         return {}; });
@@ -131,6 +136,19 @@ choc::value::Value WebViewEditor::handleSetParameterValueEvent(const choc::value
         double const v = numberFromChocValue(e["value"]);
 
         setParameterValue(std::string{paramId}, static_cast<float>(v));
+    }
+
+    return {};
+}
+
+choc::value::Value WebViewEditor::handleSetMidiOut(const choc::value::ValueView &e) const
+{
+    if (e.isObject() && e.hasObjectMember("message") && e.hasObjectMember("index"))
+    {
+        auto const &message = e["message"].getString();
+        double const v = numberFromChocValue(e["index"]);
+
+        setMidiOut(std::string{message}, static_cast<int>(v));
     }
 
     return {};

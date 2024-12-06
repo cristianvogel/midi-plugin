@@ -7,6 +7,7 @@
  */
 
 import {IncomingMIDI} from "../state/customState.svelte"
+import {isValidMidiHex} from "../utils/helpers";
 export declare var globalThis: any;
 
 // ** processHostState
@@ -70,18 +71,42 @@ export function RegisterMessagesFromHost() {
 
 
 
-/* ━━━━ RegisterMessageToHost ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+/* ━━━━ RegisterMessagesToHost ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 * Register messages to the back end from the UI, such as the 'requestReady' init call
 * and of course a means of updating host params from the UI via updateHost.
 * ━━━━━━━━━━━━━━
 */
-export const RegisterMessageToHost = {
-    updateHost: function (paramId: string, value: number) {
+export const RegisterMessagesToHost = {
+
+    /** ━━━━━━━
+     * Update a paramID to a new value in the host
+     */
+    setParameterValue: function (paramId: string, value: number) {
         if (typeof globalThis.__postNativeMessage__ === "function") {
             globalThis.__postNativeMessage__("setParameterValue", {
                 paramId,
                 value
             });
+        }
+    },
+    /** ━━━━━━━
+     * Send MIDI three byte messages from the plugin
+     * @param messages eg: [ "90 3C 64", "80 4b 7f" ... ]
+     * Posts all the messages passed by the array and an index
+     * to keep track of an order of events
+     */
+    sendMIDI: function ( messages: Array<string> ) {
+        if (typeof globalThis.__postNativeMessage__ === "function") {
+            let index = 0;
+            for (let message of messages) {
+                if (isValidMidiHex(message)) {
+                    globalThis.__postNativeMessage__("sendMIDI", {
+                        message,
+                        index
+                    });
+                    index++;
+                }
+            }
         }
     },
 
@@ -110,4 +135,6 @@ export const RegisterMessageToHost = {
             });
         }
     },
+
+
 };
