@@ -2,6 +2,7 @@ import {Renderer, el} from '@elemaudio/core';
 import {RefMap} from './RefMap';
 import synth from "./synth.js";
 
+
 // First, we initialize a custom Renderer instance that marshals our instruction
 // batches through the __postNativeMessage__ function to direct the underlying native
 // engine.
@@ -43,7 +44,7 @@ globalThis.__receiveStateChange__ = (serializedState) => {
     prevState = state;
 };
 
-////////////////////////////////////////////////////////////////////
+// MindfulHarmony ////////////////////////////////////////////////
 // MIDI events as serialised three byte messages come in to the headless
 // JSContext (here) from the native side. What gets received in this context will
 // function for MIDI or audio param updates even when the WebView is closed or not available.
@@ -57,11 +58,18 @@ globalThis.__receiveStateChange__ = (serializedState) => {
 // Define another global function to perform the parsing in one place
 //
 globalThis.__receiveMIDI__ = (data) => {
-    console.log('QUICKJS::received raw MIDI message', JSON.parse(data))
+    console.log('QUICKJS::rcv raw MIDI message', JSON.parse(data));
 }
 
+// MindfulHarmony ////////////////////////////////////////////////
+globalThis.__receiveTableContent__ = (data) =>
+{
+    console.log('QUICKJS::rcv table content:', JSON.parse(data));
+}
+
+
 //---------------------------------------------------------------------
-////SRVB Detail//////////////////////////////////////////////////////
+////SRVB specific detail///////////////////////////////////////////////
 // NOTE: Experimental ◬
 // This hook allows the native side to inject serialized graph state from
 // the running elem::Runtime instance so that we can throw away and reinitialize

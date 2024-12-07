@@ -8,7 +8,11 @@
 
 import {IncomingMIDI, UIConsole} from "../state/customState.svelte"
 import {isValidMidiHex} from "../utils/helpers";
+import {TableContent} from "../declarations";
+
 export declare var globalThis: any;
+
+
 
 // ** processHostState
 // here we will be processing host state changes
@@ -42,6 +46,14 @@ export function RegisterMessagesFromHost() {
         processHostState(state);
     };
 
+    // MindfulHarmony ////////////////////////////////////////////////
+    globalThis.__receiveTableContent__ = (data: any) =>
+    {
+        let parsedData: TableContent = JSON.parse(data);
+
+        UIConsole.extend( theLog( JSON.stringify(parsedData) as string ) )
+    }
+
     /* 
      * Handles incoming MIDI data
      */
@@ -51,25 +63,27 @@ export function RegisterMessagesFromHost() {
             hexBytes = JSON.parse(data);
             IncomingMIDI.update(hexBytes)
         } catch {
-            console.warn("UI::Error receiving MIDI data -> ", data);
+            UIConsole.update("Error receiving MIDI data -> " + JSON.parse(data));
         }
     };
 
     /* 
      * DEV ONLY: Handles logging and errors
+     * via the WebView browser tools ( press right mouse on View to
+     * get access to the console via 'Inspect Element'
      */
     globalThis.__receiveError__ = function (error: any) {
         //ConsoleText.set("Error: " + error);
-        console.log("PLUGIN:: " + error);
+        UIConsole.update("ERROR_FROM_PLUGIN:: " + error);
+        console.log()
     };
 
     globalThis.__log__ = function (log: any) {
-        //ConsoleText.set("Error: " + error);
-        console.warn("PLUGIN:: ", log);
+        console.warn("ELEM:: ", log);
     };
 
     globalThis.__receiveLog__ = function (text: string) {
-        UIConsole.extend( text )
+        console.log( "TO_VIEW_FROM_PLUGIN::" + text )
     }
 }
 
@@ -81,6 +95,16 @@ export function RegisterMessagesFromHost() {
 * 
 */
 export const NativeMessage = {
+
+    /**
+     * Reset the tableContent persistent store
+     */
+    resetTableContent: function (){
+        if (typeof globalThis.__postNativeMessage__ === "function") {
+            globalThis.__postNativeMessage__("resetTableContent")
+            UIConsole.reset();
+        }
+    },
 
     /** 
      * Update a paramID to a new value in the host
@@ -142,3 +166,13 @@ export const NativeMessage = {
 
 
 };
+
+
+ function theLog( text: string ): string
+{
+        let customLog: string = "";
+        let html = "<code style=\"display:block;overflow:hidden;margin-top:3px;border-bottom:1px solid #000;padding:3px;\">";
+        customLog += html + text + "</code>";
+return customLog;
+}
+

@@ -95,6 +95,11 @@ WebViewEditor::WebViewEditor(juce::AudioProcessor *proc, juce::File const &asset
             {
                 return handleSetMidiOut(args[1]);
             }
+
+            if (eventName == RESET_TABLE_FROM_VIEW)
+            {
+                resetTableContent();
+            }
         }
 
         return {}; });

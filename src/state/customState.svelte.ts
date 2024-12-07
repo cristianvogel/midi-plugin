@@ -49,10 +49,13 @@ function consoleText(initial: string) {
             return $state.snapshot(current);
         },
         extend(newText: string) {
-            setTimeout(() => {
-                current = "";
-            }, 2000);
-            current = ( extended + newText );
+            // setTimeout(() => {
+            //     current = "";
+            // }, 2000);
+            current = ( extended + '\n' + newText );
+        },
+        reset() {
+            current = "";
         },
         get extended() {
             return extended;

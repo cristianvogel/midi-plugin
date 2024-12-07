@@ -36,6 +36,7 @@ public:
     bool isBusesLayoutSupported (const juce::AudioProcessor::BusesLayout& layouts) const override;
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void handleResetTableContent();
     void handleMidiOut(const std::string& _msg, int index);
 
     //==============================================================================
@@ -67,12 +68,30 @@ public:
                       const juce::String& replacementChar = "%");
     static std::string serialize(const std::string& function, const choc::value::Value& data,
                           const juce::String& replacementChar = "%");
-    /** Internal helper for propagating processor state changes. */
+    //=== Dispatchers
     void dispatchStateChange();
+    void dispatchTableContentStateChange();
     void dispatchError(std::string const& name, std::string const& message);
-    void dispatchLogToUI( std::string const& text );
+    void dispatchLogToUI( std::string const& text ) const;
+
     //=== MIDI business
     void dispatchMIDItoJS( );
+
+    //=== Harmony Persistent State
+    struct ChordNotes
+    {
+        std::vector<uint8_t> noteNumbers ={ 0, 0, 0 };
+    };
+    struct TableContent
+    {
+        std::vector<ChordNotes> chordProgression = {};
+    };
+
+    std::vector<ChordNotes> chordsSoFar;
+
+    //=== State
+    elem::js::Object state;
+    elem::js::Object tableContent;
 
 private:
     //=== MIDI business
@@ -95,20 +114,16 @@ private:
 
 
 
+    //=== JS Engine
+    choc::javascript::Context jsEngine;
 
-    //==============================================================================
+    //=== Audio Engine
     std::atomic<bool> runtimeSwapRequired{false};
     std::atomic<bool> shouldInitialize { false };
     double lastKnownSampleRate = 0;
     int lastKnownBlockSize = 0;
-
-    elem::js::Object state;
-    choc::javascript::Context jsContext;
-
     juce::AudioBuffer<float> scratchBuffer;
-
     std::unique_ptr<elem::Runtime<float>> elementaryRuntime;
-
     std::map<std::string, juce::AudioParameterFloat*> parameterMap;
 
     //==============================================================================
@@ -126,10 +141,21 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MindfulMIDI)
 };
 
+namespace staticNames
+{
+    inline std::string TABLE_CONTENT = "tableContent";
+    inline std::string MAIN_DSP_JS_FILE = "dsp.main.js";
+    inline std::string SAMPLE_RATE = "sampleRate";
+    inline std::string NATIVE_MESSAGE_FUNCTION_NAME = "__postNativeMessage__";
+    inline std::string LOG_FUNCTION_NAME = "__log__";
+    inline std::string NOTE_NUMBERS = "noteNumbers";
+    inline std::string CHORD_PROGRESSION = "chordProgression";
+}
+
 
 namespace jsFunctions
 {
-    inline auto receiveMidiScript = R"script(
+    inline auto midi2jsScript = R"script(
     (function() {
       if (typeof globalThis.__receiveMIDI__ !== 'function')
         return false;
@@ -188,6 +214,16 @@ inline auto receiveStateChangeScript =     R"script(
     return false;
 
   globalThis.__receiveStateChange__(%);
+  return true;
+})();
+)script";
+
+    inline auto receiveTableContentChangeScript =     R"script(
+(function() {
+  if (typeof globalThis.__receiveTableContent__ !== 'function')
+    return false;
+
+  globalThis.__receiveTableContent__(%);
   return true;
 })();
 )script";

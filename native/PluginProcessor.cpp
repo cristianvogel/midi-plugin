@@ -12,14 +12,14 @@ MindfulMIDI::MindfulMIDI()
     : AudioProcessor(BusesProperties()
                      .withInput("Input", juce::AudioChannelSet::stereo(), true)
                      .withOutput("Output", juce::AudioChannelSet::stereo(), true))
-      , jsContext(choc::javascript::createQuickJSContext())
+      , jsEngine(choc::javascript::createQuickJSContext())
 {
     // Initialize parameters from the manifest file
 #if ELEM_DEV_LOCALHOST
     auto manifestFile = juce::URL("http://localhost:5173/manifest.json");
     auto manifestFileContents = manifestFile.readEntireTextStream().toStdString();
 #else
-    auto manifestFile = util::getAssetsDirectory().getChildFile("manifest.json");
+    auto manifestFile = mh::util::getAssetsDirectory().getChildFile("manifest.json");
 
     if (!manifestFile.existsAsFile())
         return;
@@ -60,6 +60,10 @@ MindfulMIDI::MindfulMIDI()
 
         // Update our state object with the default parameter value
         state.insert_or_assign(paramId, defValue);
+
+        // The view state property has to have some value so that when state is loaded
+        // from the host, the key exists and is populated.
+       // tableContent.insert_or_assign(staticNames::TABLE_CONTENT, static_cast<elem::js::Value>("{}") );
     }
 }
 
@@ -74,11 +78,16 @@ MindfulMIDI::~MindfulMIDI()
 //==============================================================================
 juce::AudioProcessorEditor* MindfulMIDI::createEditor()
 {
-    editor = new WebViewEditor(this, util::getAssetsDirectory(), 800, 500);
+    editor = new WebViewEditor(this, mh::util::getAssetsDirectory(), 800, 500);
 
     editor->setMidiOut = [this](const std::string& message, const int index)
     {
         handleMidiOut(message, index);
+    };
+
+    editor->resetTableContent = [this]()
+    {
+        handleResetTableContent();
     };
 
     editor->ready = [this]()
@@ -226,7 +235,7 @@ void MindfulMIDI::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffe
     // }
 
     // not sure if this needs to be handled with a runtimeSwapRequired flag
-    if (!midiMessages.isEmpty())
+    if (!runtimeSwapRequired && !midiMessages.isEmpty() )
     {
         for (const auto metadata : midiMessages)
         {
@@ -241,7 +250,7 @@ void MindfulMIDI::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffe
     // from the plug in
     midiMessages.clear();
 
-    if (midi_out_fifo_queue.getUsedSlots() > 0)
+    if ( !runtimeSwapRequired && midi_out_fifo_queue.getUsedSlots() > 0 )
     {
         OutgoingMIDIEvent m;
         while (midi_out_fifo_queue.pop(m))
@@ -260,27 +269,62 @@ void MindfulMIDI::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffe
     }
 }
 
+void MindfulMIDI::handleResetTableContent()
+{
+    tableContent.erase(staticNames::CHORD_PROGRESSION);
+    chordsSoFar.clear();
+    // atomically lock any fifo access in the processBlock as we reset
+    runtimeSwapRequired.store ( true );
+        midi_out_fifo_queue.reset(100);
+        midi_in_fifo_queue.reset(100);
+    runtimeSwapRequired.store ( false );
+    // update JS contexts
+    dispatchTableContentStateChange();
+}
 void MindfulMIDI::handleMidiOut(const std::string& _msg, int index)
 {
     // Split the string into three-two digit strings and parse from hex to unit8 bytes
     const juce::String msg(_msg);
     juce::StringArray bytes;
     bytes.addTokens(msg, " ", "\"");
-    std::vector<uint8_t> uint8_bytes;
+    std::vector<uint8_t> noteNumbers;
+
+
     for (auto& byte : bytes)
     {
-        uint8_bytes.push_back(byte.getHexValue32());
+        noteNumbers.push_back(byte.getHexValue32());
     }
     // This shuold be a standard MIDI note on message
-    if (uint8_bytes.size() == 3)
+    if (noteNumbers.size() == 3)
     {
-        const choc::midi::ShortMessage messageOut(uint8_bytes[0], uint8_bytes[1], uint8_bytes[2]);
+
+        const choc::midi::ShortMessage messageOut(noteNumbers[0], noteNumbers[1], noteNumbers[2]);
+
+        // wrap then stash current chord notes for persistent state
+        // Convert std::vector<unit8_t> to elem::js::Array
+        elem::js::Array wrappedNN;
+        for (const uint8_t nn : noteNumbers) {
+            wrappedNN.push_back(static_cast<elem::js::Number>(nn));
+        }
+        tableContent.insert_or_assign( staticNames::NOTE_NUMBERS, wrappedNN );
+        // add the current chord to the current chord progression in tableContent state
+        // TODO: reset the chord progression from JS
+        ChordNotes chordNote;
+        chordNote.noteNumbers = noteNumbers;
+        chordsSoFar.push_back(chordNote);
+
         if (midi_out_fifo_queue.push({messageOut, index}))
         {
-            dispatchLogToUI("MIDI Out > [ " + std::to_string(uint8_bytes[0]) + ","
-                + std::to_string(uint8_bytes[1]) + ","
-                + std::to_string(uint8_bytes[2]) + " ]");
+            dispatchLogToUI("MIDI Out > [ " + std::to_string(noteNumbers[0]) + ","
+                + std::to_string(noteNumbers[1]) + ","
+                + std::to_string(noteNumbers[2]) + " ]");
         }
+
+        elem::js::Value wrappedChordProgression = mh::util::wrapChordsToJsValue(chordsSoFar);
+        tableContent.insert_or_assign( staticNames::CHORD_PROGRESSION, wrappedChordProgression  );
+        // notify the JS engine and View ( if its open )
+        // of new chord and chord progression
+        dispatchTableContentStateChange();
     }
     else
     {
@@ -339,19 +383,20 @@ void MindfulMIDI::handleAsyncUpdate()
     }
 
     dispatchStateChange();
+    dispatchTableContentStateChange();
     dispatchMIDItoJS();
 }
 
 void MindfulMIDI::initJavaScriptEngine()
 {
-    jsContext = choc::javascript::createQuickJSContext();
+    jsEngine = choc::javascript::createQuickJSContext();
 
     // initialise the fifos for midi messages
-    midi_in_fifo_queue.reset( 100 );
-    midi_out_fifo_queue.reset( 100 );
+    midi_in_fifo_queue.reset(100);
+    midi_out_fifo_queue.reset(100);
 
     // Install some native interop functions in our JavaScript environment
-    jsContext.registerFunction("__postNativeMessage__", [this](choc::javascript::ArgumentList args)
+    jsEngine.registerFunction(staticNames::NATIVE_MESSAGE_FUNCTION_NAME, [this](choc::javascript::ArgumentList args)
     {
         auto const batch = elem::js::parseJSON(args[0]->toString());
         auto const rc = elementaryRuntime->applyInstructions(batch);
@@ -364,7 +409,7 @@ void MindfulMIDI::initJavaScriptEngine()
         return choc::value::Value();
     });
 
-    jsContext.registerFunction("__log__", [this](choc::javascript::ArgumentList args)
+    jsEngine.registerFunction(staticNames::LOG_FUNCTION_NAME, [this](choc::javascript::ArgumentList args)
     {
         // Forward logs to the editor if it's available; then logs show up in one place.
         //
@@ -400,7 +445,7 @@ void MindfulMIDI::initJavaScriptEngine()
     });
 
     // A simple shim to write various console operations to our native __log__ handler
-    jsContext.evaluateExpression(R"shim(
+    jsEngine.evaluateExpression(R"shim(
 (function() {
   if (typeof globalThis.console === 'undefined') {
     globalThis.console = {
@@ -423,14 +468,14 @@ void MindfulMIDI::initJavaScriptEngine()
     auto dspEntryFile = juce::URL("http://localhost:5173/dsp.main.js");
     auto dspEntryFileContents = dspEntryFile.readEntireTextStream().toStdString();
 #else
-    auto dspEntryFile = util::getAssetsDirectory().getChildFile("dsp.main.js");
+    auto dspEntryFile = mh::util::getAssetsDirectory().getChildFile(staticNames::MAIN_DSP_JS_FILE);
 
     if (!dspEntryFile.existsAsFile())
         return;
 
     auto dspEntryFileContents = dspEntryFile.loadFileAsString().toStdString();
 #endif
-    jsContext.evaluateExpression(dspEntryFileContents);
+    jsEngine.evaluateExpression(dspEntryFileContents);
 
     // Re-hydrate from current state
     const auto* kHydrateScript = jsFunctions::hydrateScript;
@@ -438,7 +483,7 @@ void MindfulMIDI::initJavaScriptEngine()
     auto expr = juce::String(kHydrateScript).replace("%", elem::js::serialize(
                                                          elem::js::serialize(elementaryRuntime->snapshot())))
                                             .toStdString();
-    jsContext.evaluateExpression(expr);
+    jsEngine.evaluateExpression(expr);
 }
 
 void MindfulMIDI::dispatchStateChange()
@@ -448,27 +493,44 @@ void MindfulMIDI::dispatchStateChange()
     // Need the double serialize here to correctly form the string script. The first
     // serialize produces the payload we want, the second serialize ensures we can replace
     // the % character in the above block and produce a valid javascript expression.
-    auto localState = state;
-    localState.insert_or_assign("sampleRate", lastKnownSampleRate);
 
-    auto expr = juce::String(kDispatchScript).replace("%", elem::js::serialize(elem::js::serialize(localState))).
-                                              toStdString();
+    state.insert_or_assign(staticNames::SAMPLE_RATE, lastKnownSampleRate);
 
-    // First we try to dispatch to the UI if it's available, because running this step will
-    // just involve placing a message in a queue.
-    if (auto* editor = dynamic_cast<WebViewEditor*>(getActiveEditor()))
+    const auto expr = juce::String(kDispatchScript).replace("%", elem::js::serialize(elem::js::serialize(state))).
+                                                    toStdString();
+
+    // First we try to dispatch to the UI if it's available
+    if (const auto* editor = dynamic_cast<WebViewEditor*>(getActiveEditor()))
     {
         editor->getWebViewPtr()->evaluateJavascript(expr);
     }
 
-    // Next we dispatch to the local engine which will evaluate any necessary JavaScript synchronously
+    // Next we dispatch to the embedded engine which will evaluate JavaScript
     // here on the main thread
-    jsContext.evaluateExpression(expr);
+    jsEngine.evaluateExpression(expr);
+}
+
+void MindfulMIDI::dispatchTableContentStateChange()
+{
+    const auto* kDispatchScript = jsFunctions::receiveTableContentChangeScript;
+    elem::js::Object wrappedTableContent;
+    wrappedTableContent.insert_or_assign(staticNames::TABLE_CONTENT, tableContent);
+
+    const auto expr = serialize(kDispatchScript, wrappedTableContent, "%");
+
+    // First we try to dispatch to the UI if it's available
+    if (const auto* editor = dynamic_cast<WebViewEditor*>(getActiveEditor()))
+    {
+        editor->getWebViewPtr()->evaluateJavascript(expr);
+    }
+    // Next we dispatch to the embedded engine which will evaluate JavaScript
+    // here on the main thread
+    jsEngine.evaluateExpression(expr);
 }
 
 //= Extended logging , so we can post debug messages directly in
 //= the plugin UI.
-void MindfulMIDI::dispatchLogToUI(const std::string& text)
+void MindfulMIDI::dispatchLogToUI(const std::string& text) const
 {
     const auto* kDispatchScript = jsFunctions::logToViewScript;
     if (const auto* editor = dynamic_cast<WebViewEditor*>(getActiveEditor()))
@@ -497,12 +559,11 @@ void MindfulMIDI::dispatchMIDItoJS()
 
     const auto serializedMidi = elem::js::serialize(vec);
 
-    const auto* kDispatchScript = jsFunctions::receiveMidiScript;
+    const auto* kDispatchScript = jsFunctions::midi2jsScript;
 
     // Need the double serialize here to correctly form the string script. The first
     // serialize produces the payload we want, the second serialize ensures we can replace
     // the % character in the above script block and produce a valid javascript expression.
-
     const auto expr = juce::String(kDispatchScript).replace("%", elem::js::serialize(
                                                                 elem::js::serialize(serializedMidi))).
                                                     toStdString();
@@ -516,7 +577,7 @@ void MindfulMIDI::dispatchMIDItoJS()
 
     // Next we dispatch to the local engine which will evaluate any necessary JavaScript synchronously
     // here on the main thread
-    jsContext.evaluateExpression(expr);
+    jsEngine.evaluateExpression(expr);
 }
 
 
@@ -537,7 +598,7 @@ void MindfulMIDI::dispatchError(std::string const& name, std::string const& mess
 
     // Next we dispatch to the local engine which will evaluate any necessary JavaScript synchronously
     // here on the main thread
-    jsContext.evaluateExpression(expr);
+    jsEngine.evaluateExpression(expr);
 }
 
 /*▮▮js▮▮▮▮▮▮frontend▮▮▮▮▮▮backend▮▮▮▮▮▮messaging▮▮▮▮▮▮
