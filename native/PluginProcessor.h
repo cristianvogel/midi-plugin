@@ -86,6 +86,8 @@ public:
         std::vector<ChordNotes> chordProgression = {};
     };
 
+
+
     //=== State
     elem::js::Object state;
     elem::js::Object tableContent;
@@ -145,6 +147,8 @@ namespace staticNames
     inline std::string SAMPLE_RATE = "sampleRate";
     inline std::string NATIVE_MESSAGE_FUNCTION_NAME = "__postNativeMessage__";
     inline std::string LOG_FUNCTION_NAME = "__log__";
+    inline std::string NOTE_NUMEBRS = "noteNumbers";
+    inline std::string CHORD_PROGRESSION = "chordProgression";
 }
 
 

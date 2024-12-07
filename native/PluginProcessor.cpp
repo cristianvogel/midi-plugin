@@ -347,8 +347,8 @@ void MindfulMIDI::initJavaScriptEngine()
     jsEngine = choc::javascript::createQuickJSContext();
 
     // initialise the fifos for midi messages
-    midi_in_fifo_queue.reset( 100 );
-    midi_out_fifo_queue.reset( 100 );
+    midi_in_fifo_queue.reset(100);
+    midi_out_fifo_queue.reset(100);
 
     // Install some native interop functions in our JavaScript environment
     jsEngine.registerFunction(staticNames::NATIVE_MESSAGE_FUNCTION_NAME, [this](choc::javascript::ArgumentList args)
@@ -452,7 +452,7 @@ void MindfulMIDI::dispatchStateChange()
     state.insert_or_assign(staticNames::SAMPLE_RATE, lastKnownSampleRate);
 
     const auto expr = juce::String(kDispatchScript).replace("%", elem::js::serialize(elem::js::serialize(state))).
-                                              toStdString();
+                                                    toStdString();
 
     // First we try to dispatch to the UI if it's available
     if (const auto* editor = dynamic_cast<WebViewEditor*>(getActiveEditor()))
@@ -468,15 +468,19 @@ void MindfulMIDI::dispatchStateChange()
 void MindfulMIDI::dispatchTableContentStateChange()
 {
     const auto* kDispatchScript = jsFunctions::receiveTableContentChangeScript;
+    elem::js::Object wrappedTableContent;
+    wrappedTableContent.insert_or_assign(staticNames::CHORD_PROGRESSION, tableContent);
 
+    const auto expr = serialize(kDispatchScript, wrappedTableContent, "%");
 
-
+    // First we try to dispatch to the UI if it's available
     if (const auto* editor = dynamic_cast<WebViewEditor*>(getActiveEditor()))
     {
-        const auto wrappedText = choc::value::createString("");
-        const auto expr = serialize(kDispatchScript, wrappedText, "%");
         editor->getWebViewPtr()->evaluateJavascript(expr);
     }
+    // Next we dispatch to the embedded engine which will evaluate JavaScript
+    // here on the main thread
+    jsEngine.evaluateExpression(expr);
 }
 
 //= Extended logging , so we can post debug messages directly in
