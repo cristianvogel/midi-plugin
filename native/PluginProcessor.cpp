@@ -280,7 +280,7 @@ void MindfulMIDI::handleMidiOut(const std::string& _msg, int index)
     // This shuold be a standard MIDI note on message
     if (noteNumbers.size() == 3)
     {
-        std::vector<ChordNotes> chordProgession;
+
         const choc::midi::ShortMessage messageOut(noteNumbers[0], noteNumbers[1], noteNumbers[2]);
 
         // wrap then stash current chord notes for persistent state
@@ -294,7 +294,7 @@ void MindfulMIDI::handleMidiOut(const std::string& _msg, int index)
         // TODO: reset the chord progression from JS
         ChordNotes chordNote;
         chordNote.noteNumbers = noteNumbers;
-        chordProgession.push_back(chordNote);
+        chordsSoFar.push_back(chordNote);
 
         if (midi_out_fifo_queue.push({messageOut, index}))
         {
@@ -303,7 +303,7 @@ void MindfulMIDI::handleMidiOut(const std::string& _msg, int index)
                 + std::to_string(noteNumbers[2]) + " ]");
         }
 
-        elem::js::Value wrappedChordProgression = mh::util::wrapChordsToJsValue(chordProgession);
+        elem::js::Value wrappedChordProgression = mh::util::wrapChordsToJsValue(chordsSoFar);
         tableContent.insert_or_assign( staticNames::CHORD_PROGRESSION, wrappedChordProgression  );
         // notify the JS engine and View ( if its open )
         // of new chord and chord progression

@@ -86,7 +86,7 @@ public:
         std::vector<ChordNotes> chordProgression = {};
     };
 
-
+    std::vector<ChordNotes> chordsSoFar;
 
     //=== State
     elem::js::Object state;
