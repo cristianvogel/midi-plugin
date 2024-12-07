@@ -37,7 +37,7 @@ public:
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     void handleMidiOut(const std::string& _msg, int index);
-
+    void queueMidiOutTestEvent();
     //==============================================================================
     const juce::String getName() const override;
     bool acceptsMidi() const override;
@@ -70,9 +70,9 @@ public:
     /** Internal helper for propagating processor state changes. */
     void dispatchStateChange();
     void dispatchError(std::string const& name, std::string const& message);
-    void dispatchLogToUI( std::string const& text );
+    void dispatchLogToUI( std::string const& text ) const;
     //=== MIDI business
-    void dispatchMIDItoJS( );
+    void process_midi_input( );
 
 private:
     //=== MIDI business
@@ -89,6 +89,11 @@ private:
         //MIDIClock::time_point time;
         choc::midi::ShortMessage message;
         int index = 0;
+        // Default constructor
+        OutgoingMIDIEvent() = default;
+        // Constructor to initialize message and index
+        OutgoingMIDIEvent(const choc::midi::ShortMessage& msg, const int idx)
+            : message(msg), index(idx) {}
     };
     choc::fifo::SingleReaderSingleWriterFIFO<IncomingMIDIEvent> midi_in_fifo_queue;
     choc::fifo::SingleReaderSingleWriterFIFO<OutgoingMIDIEvent> midi_out_fifo_queue;

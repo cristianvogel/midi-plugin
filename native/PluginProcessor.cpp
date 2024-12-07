@@ -34,16 +34,16 @@ MindfulMIDI::MindfulMIDI()
 
     auto parameters = manifest.getWithDefault("parameters", elem::js::Array());
 
-    for (const auto& descrip : parameters)
+    for (const auto& specification : parameters)
     {
-        if (!descrip.isObject())
+        if (!specification.isObject())
             continue;
 
-        auto paramId = descrip.getWithDefault("paramId", elem::js::String("unknown"));
-        auto name = descrip.getWithDefault("name", elem::js::String("Unknown"));
-        auto minValue = descrip.getWithDefault("min", static_cast<elem::js::Number>(0));
-        auto maxValue = descrip.getWithDefault("max", static_cast<elem::js::Number>(1));
-        auto defValue = descrip.getWithDefault("defaultValue", static_cast<elem::js::Number>(0));
+        auto paramId = specification.getWithDefault("paramId", elem::js::String("unknown"));
+        auto name = specification.getWithDefault("name", elem::js::String("Unknown"));
+        auto minValue = specification.getWithDefault("min", static_cast<elem::js::Number>(0));
+        auto maxValue = specification.getWithDefault("max", static_cast<elem::js::Number>(1));
+        auto defValue = specification.getWithDefault("defaultValue", static_cast<elem::js::Number>(0));
 
         auto* p = new juce::AudioParameterFloat(
             juce::ParameterID(paramId, 1),
@@ -262,7 +262,7 @@ void MindfulMIDI::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffe
 
 void MindfulMIDI::handleMidiOut(const std::string& _msg, int index)
 {
-    // Split the string into three-two digit strings and parse from hex to unit8 bytes
+    // Split the string into three-two digit strings and parse from hex to uint8 bytes
     const juce::String msg(_msg);
     juce::StringArray bytes;
     bytes.addTokens(msg, " ", "\"");
@@ -271,7 +271,7 @@ void MindfulMIDI::handleMidiOut(const std::string& _msg, int index)
     {
         uint8_bytes.push_back(byte.getHexValue32());
     }
-    // This shuold be a standard MIDI note on message
+    // This should be a standard MIDI note on message
     if (uint8_bytes.size() == 3)
     {
         const choc::midi::ShortMessage messageOut(uint8_bytes[0], uint8_bytes[1], uint8_bytes[2]);
@@ -339,7 +339,7 @@ void MindfulMIDI::handleAsyncUpdate()
     }
 
     dispatchStateChange();
-    dispatchMIDItoJS();
+    process_midi_input();
 }
 
 void MindfulMIDI::initJavaScriptEngine()
@@ -468,7 +468,7 @@ void MindfulMIDI::dispatchStateChange()
 
 //= Extended logging , so we can post debug messages directly in
 //= the plugin UI.
-void MindfulMIDI::dispatchLogToUI(const std::string& text)
+void MindfulMIDI::dispatchLogToUI(const std::string& text) const
 {
     const auto* kDispatchScript = jsFunctions::logToViewScript;
     if (const auto* editor = dynamic_cast<WebViewEditor*>(getActiveEditor()))
@@ -479,8 +479,19 @@ void MindfulMIDI::dispatchLogToUI(const std::string& text)
     }
 }
 
+int testNoteCount = 0;
+
+void MindfulMIDI::queueMidiOutTestEvent()
+{
+    testNoteCount = (++testNoteCount % 12);
+    const auto testNote = util::generateRandomMIDINoteMessage() ;
+    const OutgoingMIDIEvent msg( testNote, testNoteCount );
+    midi_out_fifo_queue.push( msg );
+}
+
+
 //= MIDI out to WebView and jsContext
-void MindfulMIDI::dispatchMIDItoJS()
+void MindfulMIDI::process_midi_input()
 {
     const uint32_t midiCount = midi_in_fifo_queue.getUsedSlots();
 
@@ -489,9 +500,14 @@ void MindfulMIDI::dispatchMIDItoJS()
     if (midiCount > 0)
     {
         IncomingMIDIEvent m;
+
         while (midi_in_fifo_queue.pop(m))
         {
-            vec.push_back(elem::js::Value(m.message.toHexString()));
+            vec.emplace_back(m.message.toHexString());
+            // test if midi out continues to work when View is closed...
+            // by pushing a random note into the midi out fifo
+            // for each note coming in
+            queueMidiOutTestEvent();
         };
     }
 

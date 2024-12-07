@@ -1,7 +1,7 @@
 <script lang="ts">
 
     import {NativeMessage} from "../lib/NativeMessage.svelte";
-    import {generateMIDIMessage} from "../utils/helpers";
+    import {generateRandomMIDINoteMessage} from "../utils/helpers";
 
     let midiMessage = $state("00 00 00");
     let log = $state("")
@@ -14,7 +14,7 @@
     ];
 
     function testOneByOne() {
-        let randomNote: string = generateMIDIMessage();
+        let randomNote: string = generateRandomMIDINoteMessage();
         NativeMessage.sendMIDI( [ randomNote ] )
         log += `${randomNote} sent.\n `
     }

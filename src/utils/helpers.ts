@@ -30,13 +30,9 @@ export function isValidMidiHex(hexString: string): boolean {
  *  generate some random midi notes
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  */
-export function generateMIDIMessage(): string {
-    // Generate a random MIDI note between 21 (A0) and 108 (C8) inclusive
+export function generateRandomMIDINoteMessage(): string {
     const note = Math.floor(Math.random() * (70 - 40 + 1)) + 40;
-
-    // Generate a random velocity between 1 (min velocity) and 127 (max velocity) inclusive
     const velocity = 60;
-
-    // Convert to hexadecimal and format the message
+    // Convert to hexadecimal and format a midi message for channel 1
     return `90 ${note.toString(16).toUpperCase()} ${velocity.toString(16).toUpperCase()}`;
 }

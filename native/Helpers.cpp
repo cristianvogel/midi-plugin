@@ -4,11 +4,26 @@
 
 //======= HELPERS ==============================
 // A helper for locating bundled asset files
-
+#include <random>
 #include "Helpers.h"
 
 namespace util
 {
+    choc::midi::ShortMessage generateRandomMIDINoteMessage() {
+        // Set up the random number generator
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> dis(40, 70);
+
+        const int note = dis(gen);
+        constexpr int velocity = 60;
+
+        // Convert to hexadecimal and format a MIDI message for channel 1 using juce::String
+        const choc::midi::ShortMessage midiMessage( 0x90, note, velocity );
+        return midiMessage;
+    }
+
+
     juce::File getAssetsDirectory()
     {
 #if JUCE_MAC

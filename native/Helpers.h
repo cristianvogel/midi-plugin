@@ -5,12 +5,14 @@
 #ifndef HELPERS_H
 #define HELPERS_H
 
+#include <choc_MIDI.h>
 #include <juce_audio_basics/juce_audio_basics.h>
 
 namespace util
 {
     juce::File getAssetsDirectory();
     bool isOdd(int num);
+    choc::midi::ShortMessage generateRandomMIDINoteMessage();
 
 } // namespace util
 
