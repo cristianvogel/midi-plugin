@@ -58,13 +58,13 @@ globalThis.__receiveStateChange__ = (serializedState) => {
 // Define another global function to perform the parsing in one place
 //
 globalThis.__receiveMIDI__ = (data) => {
-    console.log('QUICKJS::received raw MIDI message', JSON.parse(data));
+    console.log('QUICKJS::rcv raw MIDI message', JSON.parse(data));
 }
 
 // MindfulHarmony ////////////////////////////////////////////////
 globalThis.__receiveTableContent__ = (data) =>
 {
-    console.log('Received table content:', JSON.parse(data));
+    console.log('QUICKJS::rcv table content:', JSON.parse(data));
 }
 
 

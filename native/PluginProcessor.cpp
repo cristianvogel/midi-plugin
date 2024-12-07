@@ -63,7 +63,7 @@ MindfulMIDI::MindfulMIDI()
 
         // The view state property has to have some value so that when state is loaded
         // from the host, the key exists and is populated.
-        tableContent.insert_or_assign(staticNames::TABLE_CONTENT, static_cast<elem::js::Value>("{}") );
+       // tableContent.insert_or_assign(staticNames::TABLE_CONTENT, static_cast<elem::js::Value>("{}") );
     }
 }
 

@@ -42,6 +42,17 @@ export function RegisterMessagesFromHost() {
         processHostState(state);
     };
 
+    // MindfulHarmony ////////////////////////////////////////////////
+    globalThis.__receiveTableContent__ = (data: any) =>
+    {
+        let parsedData = JSON.parse(data);
+        for (let key in parsedData) {
+            if (parsedData.hasOwnProperty(key)) {
+                UIConsole.extend('Key:' + key + ' Value:' + Object.values( parsedData[key] ) );
+            }
+        }
+    }
+
     /* 
      * Handles incoming MIDI data
      */
@@ -51,7 +62,7 @@ export function RegisterMessagesFromHost() {
             hexBytes = JSON.parse(data);
             IncomingMIDI.update(hexBytes)
         } catch {
-            console.warn("UI::Error receiving MIDI data -> ", data);
+            UIConsole.update("UI::Error receiving MIDI data -> " + JSON.parse(data));
         }
     };
 

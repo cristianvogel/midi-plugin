@@ -11,7 +11,6 @@
     let newMessage = $state(false);
 
     onMount(() => {
-        UIConsole.update('UI::Registered message handlers..');
         RegisterMessagesFromHost();
     })
 
@@ -34,35 +33,40 @@
     </div>
 </div>
 {#if newMessage}
-    <div transition:fade>
+    <div transition:fade style="position: absolute; left: 300px">
         <div class="message-rcv-console">MIDI message received</div>
         <pre class="midi-message">{midiMessageRaw}</pre>
     </div>
 {/if}
 
-{#if log.length}
-    <div class="ui-console">
+
+    <div class="log">
         Message from JSContext: {@html log }
     </div>
-{/if}
+
 <style>
     .midi-message {
         color: lawngreen;
-        font-size: larger;
+        font-size: x-large;
     }
 
-    .ui-console {
-        font-family: 'Courier New', Courier, monospace;
-        font-size: x-small;
-        white-space: pre-line;
-        position: absolute;
-        top: 50%;
-        left: 35%;
-    }
 
     .message-rcv-console {
         font-family: 'Courier New', Courier, monospace;
         font-size: small;
         white-space: pre-line;
+    }
+
+    .log {
+        padding: 15px;
+        background-color: darkslategray;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        overflow-y: auto;
+        width: 20%;
+        height: 100px; /* Adjust as necessary */
+        font-family: 'Courier New', Courier, monospace;
+        font-size: x-small;
+        white-space: pre-line; /* Keeps the formatted text look (like in `<pre>`), but wraps text */
     }
 </style>
