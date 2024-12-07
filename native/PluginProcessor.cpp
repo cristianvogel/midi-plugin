@@ -12,7 +12,7 @@ MindfulMIDI::MindfulMIDI()
     : AudioProcessor(BusesProperties()
                      .withInput("Input", juce::AudioChannelSet::stereo(), true)
                      .withOutput("Output", juce::AudioChannelSet::stereo(), true))
-      , jsContext(choc::javascript::createQuickJSContext())
+      , jsEngine(choc::javascript::createQuickJSContext())
 {
     // Initialize parameters from the manifest file
 #if ELEM_DEV_LOCALHOST
@@ -344,14 +344,14 @@ void MindfulMIDI::handleAsyncUpdate()
 
 void MindfulMIDI::initJavaScriptEngine()
 {
-    jsContext = choc::javascript::createQuickJSContext();
+    jsEngine = choc::javascript::createQuickJSContext();
 
     // initialise the fifos for midi messages
     midi_in_fifo_queue.reset( 100 );
     midi_out_fifo_queue.reset( 100 );
 
     // Install some native interop functions in our JavaScript environment
-    jsContext.registerFunction("__postNativeMessage__", [this](choc::javascript::ArgumentList args)
+    jsEngine.registerFunction(staticNames::NATIVE_MESSAGE_FUNCTION_NAME, [this](choc::javascript::ArgumentList args)
     {
         auto const batch = elem::js::parseJSON(args[0]->toString());
         auto const rc = elementaryRuntime->applyInstructions(batch);
@@ -364,7 +364,7 @@ void MindfulMIDI::initJavaScriptEngine()
         return choc::value::Value();
     });
 
-    jsContext.registerFunction("__log__", [this](choc::javascript::ArgumentList args)
+    jsEngine.registerFunction(staticNames::LOG_FUNCTION_NAME, [this](choc::javascript::ArgumentList args)
     {
         // Forward logs to the editor if it's available; then logs show up in one place.
         //
@@ -400,7 +400,7 @@ void MindfulMIDI::initJavaScriptEngine()
     });
 
     // A simple shim to write various console operations to our native __log__ handler
-    jsContext.evaluateExpression(R"shim(
+    jsEngine.evaluateExpression(R"shim(
 (function() {
   if (typeof globalThis.console === 'undefined') {
     globalThis.console = {
@@ -423,14 +423,14 @@ void MindfulMIDI::initJavaScriptEngine()
     auto dspEntryFile = juce::URL("http://localhost:5173/dsp.main.js");
     auto dspEntryFileContents = dspEntryFile.readEntireTextStream().toStdString();
 #else
-    auto dspEntryFile = util::getAssetsDirectory().getChildFile("dsp.main.js");
+    auto dspEntryFile = util::getAssetsDirectory().getChildFile(staticNames::MAIN_DSP_JS_FILE);
 
     if (!dspEntryFile.existsAsFile())
         return;
 
     auto dspEntryFileContents = dspEntryFile.loadFileAsString().toStdString();
 #endif
-    jsContext.evaluateExpression(dspEntryFileContents);
+    jsEngine.evaluateExpression(dspEntryFileContents);
 
     // Re-hydrate from current state
     const auto* kHydrateScript = jsFunctions::hydrateScript;
@@ -438,7 +438,7 @@ void MindfulMIDI::initJavaScriptEngine()
     auto expr = juce::String(kHydrateScript).replace("%", elem::js::serialize(
                                                          elem::js::serialize(elementaryRuntime->snapshot())))
                                             .toStdString();
-    jsContext.evaluateExpression(expr);
+    jsEngine.evaluateExpression(expr);
 }
 
 void MindfulMIDI::dispatchStateChange()
@@ -448,27 +448,40 @@ void MindfulMIDI::dispatchStateChange()
     // Need the double serialize here to correctly form the string script. The first
     // serialize produces the payload we want, the second serialize ensures we can replace
     // the % character in the above block and produce a valid javascript expression.
-    auto localState = state;
-    localState.insert_or_assign("sampleRate", lastKnownSampleRate);
 
-    auto expr = juce::String(kDispatchScript).replace("%", elem::js::serialize(elem::js::serialize(localState))).
+    state.insert_or_assign(staticNames::SAMPLE_RATE, lastKnownSampleRate);
+
+    const auto expr = juce::String(kDispatchScript).replace("%", elem::js::serialize(elem::js::serialize(state))).
                                               toStdString();
 
-    // First we try to dispatch to the UI if it's available, because running this step will
-    // just involve placing a message in a queue.
-    if (auto* editor = dynamic_cast<WebViewEditor*>(getActiveEditor()))
+    // First we try to dispatch to the UI if it's available
+    if (const auto* editor = dynamic_cast<WebViewEditor*>(getActiveEditor()))
     {
         editor->getWebViewPtr()->evaluateJavascript(expr);
     }
 
-    // Next we dispatch to the local engine which will evaluate any necessary JavaScript synchronously
+    // Next we dispatch to the embedded engine which will evaluate JavaScript
     // here on the main thread
-    jsContext.evaluateExpression(expr);
+    jsEngine.evaluateExpression(expr);
+}
+
+void MindfulMIDI::dispatchTableContentStateChange()
+{
+    const auto* kDispatchScript = jsFunctions::receiveTableContentChangeScript;
+
+
+
+    if (const auto* editor = dynamic_cast<WebViewEditor*>(getActiveEditor()))
+    {
+        const auto wrappedText = choc::value::createString("");
+        const auto expr = serialize(kDispatchScript, wrappedText, "%");
+        editor->getWebViewPtr()->evaluateJavascript(expr);
+    }
 }
 
 //= Extended logging , so we can post debug messages directly in
 //= the plugin UI.
-void MindfulMIDI::dispatchLogToUI(const std::string& text)
+void MindfulMIDI::dispatchLogToUI(const std::string& text) const
 {
     const auto* kDispatchScript = jsFunctions::logToViewScript;
     if (const auto* editor = dynamic_cast<WebViewEditor*>(getActiveEditor()))
@@ -516,7 +529,7 @@ void MindfulMIDI::dispatchMIDItoJS()
 
     // Next we dispatch to the local engine which will evaluate any necessary JavaScript synchronously
     // here on the main thread
-    jsContext.evaluateExpression(expr);
+    jsEngine.evaluateExpression(expr);
 }
 
 
@@ -537,7 +550,7 @@ void MindfulMIDI::dispatchError(std::string const& name, std::string const& mess
 
     // Next we dispatch to the local engine which will evaluate any necessary JavaScript synchronously
     // here on the main thread
-    jsContext.evaluateExpression(expr);
+    jsEngine.evaluateExpression(expr);
 }
 
 /*▮▮js▮▮▮▮▮▮frontend▮▮▮▮▮▮backend▮▮▮▮▮▮messaging▮▮▮▮▮▮
