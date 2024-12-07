@@ -2,7 +2,7 @@
     import {onMount} from "svelte";
     import {RegisterMessagesFromHost} from "./lib/NativeMessage.svelte";
     import {IncomingMIDI, UIConsole} from "./state/customState.svelte";
-    import MidiSendButtons from "./Components/MidiSendButtons.svelte";
+    import MidiSendButtons from "./Components/TestButtons.svelte";
     import {fade} from "svelte/transition";
 
     let midiMessageRaw = $derived(IncomingMIDI.current);
@@ -33,7 +33,7 @@
     </div>
 </div>
 {#if newMessage}
-    <div transition:fade style="position: absolute; left: 300px">
+    <div transition:fade style="position: absolute; left: 300px; top: 25%;">
         <div class="message-rcv-console">MIDI message received</div>
         <pre class="midi-message">{midiMessageRaw}</pre>
     </div>
@@ -41,7 +41,8 @@
 
 
     <div class="log">
-        Message from JSContext: {@html log }
+        Message from JSContext: <br><hr>
+        {@html log }
     </div>
 
 <style>
@@ -63,8 +64,8 @@
         border: 1px solid #ddd;
         border-radius: 5px;
         overflow-y: auto;
-        width: 20%;
-        height: 100px; /* Adjust as necessary */
+        width: 66%;
+        height: 180px; /* Adjust as necessary */
         font-family: 'Courier New', Courier, monospace;
         font-size: x-small;
         white-space: pre-line; /* Keeps the formatted text look (like in `<pre>`), but wraps text */

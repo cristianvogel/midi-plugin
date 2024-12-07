@@ -85,6 +85,11 @@ juce::AudioProcessorEditor* MindfulMIDI::createEditor()
         handleMidiOut(message, index);
     };
 
+    editor->resetTableContent = [this]()
+    {
+        handleResetTableContent();
+    };
+
     editor->ready = [this]()
     {
         dispatchStateChange();
@@ -230,7 +235,7 @@ void MindfulMIDI::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffe
     // }
 
     // not sure if this needs to be handled with a runtimeSwapRequired flag
-    if (!midiMessages.isEmpty())
+    if (!runtimeSwapRequired && !midiMessages.isEmpty() )
     {
         for (const auto metadata : midiMessages)
         {
@@ -245,7 +250,7 @@ void MindfulMIDI::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffe
     // from the plug in
     midiMessages.clear();
 
-    if (midi_out_fifo_queue.getUsedSlots() > 0)
+    if ( !runtimeSwapRequired && midi_out_fifo_queue.getUsedSlots() > 0 )
     {
         OutgoingMIDIEvent m;
         while (midi_out_fifo_queue.pop(m))
@@ -264,6 +269,18 @@ void MindfulMIDI::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffe
     }
 }
 
+void MindfulMIDI::handleResetTableContent()
+{
+    tableContent.erase(staticNames::CHORD_PROGRESSION);
+    chordsSoFar.clear();
+    // atomically lock any fifo access in the processBlock as we reset
+    runtimeSwapRequired.store ( true );
+        midi_out_fifo_queue.reset(100);
+        midi_in_fifo_queue.reset(100);
+    runtimeSwapRequired.store ( false );
+    // update JS contexts
+    dispatchTableContentStateChange();
+}
 void MindfulMIDI::handleMidiOut(const std::string& _msg, int index)
 {
     // Split the string into three-two digit strings and parse from hex to unit8 bytes

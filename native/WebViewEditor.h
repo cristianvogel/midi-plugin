@@ -27,6 +27,7 @@ public:
     std::function<void(const std::string &, int)> setMidiOut = [](const std::string &, int) {};
     std::function<void()> reload = []() {};
     std::function<void()> ready = []() {};
+    std::function<void()> resetTableContent = []() {};
 
     void executeJavascript(const std::string &script) const;
 
@@ -37,6 +38,7 @@ private:
     std::string SET_PARAMETER_VALUE = "setParameterValue";
     std::string SERVER_PORT = "serverInfo";
     std::string SEND_MIDI_EVENT = "sendMIDI";
+    std::string RESET_TABLE_FROM_VIEW = "resetTableContent";
 
     choc::value::Value handleSetParameterValueEvent(const choc::value::ValueView &e) const;
     choc::value::Value handleSetMidiOut(const choc::value::ValueView& e) const;

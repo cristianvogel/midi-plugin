@@ -24,6 +24,11 @@
         log = "Sent test array of " + testChord.length + " messages.\n"
     }
 
+    function resetProgression() {
+        // not implemented yet
+        NativeMessage.resetTableContent();
+    }
+
 </script>
 <div>
     <button onclick={testOneByOne}>
@@ -32,6 +37,10 @@
 
     <button onclick={testAllAtOnce}>
         All at Once Test
+    </button>
+
+    <button onclick={resetProgression}>
+        Reset TableContent
     </button>
 
     <pre class="log">
