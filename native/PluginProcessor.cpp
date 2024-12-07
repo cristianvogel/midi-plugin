@@ -366,6 +366,7 @@ void MindfulMIDI::handleAsyncUpdate()
     }
 
     dispatchStateChange();
+    dispatchTableContentStateChange();
     dispatchMIDItoJS();
 }
 
@@ -496,7 +497,7 @@ void MindfulMIDI::dispatchTableContentStateChange()
 {
     const auto* kDispatchScript = jsFunctions::receiveTableContentChangeScript;
     elem::js::Object wrappedTableContent;
-    wrappedTableContent.insert_or_assign(staticNames::CHORD_PROGRESSION, tableContent);
+    wrappedTableContent.insert_or_assign(staticNames::TABLE_CONTENT, tableContent);
 
     const auto expr = serialize(kDispatchScript, wrappedTableContent, "%");
 
