@@ -19,7 +19,7 @@ MindfulMIDI::MindfulMIDI()
     auto manifestFile = juce::URL("http://localhost:5173/manifest.json");
     auto manifestFileContents = manifestFile.readEntireTextStream().toStdString();
 #else
-    auto manifestFile = util::getAssetsDirectory().getChildFile("manifest.json");
+    auto manifestFile = mh::util::getAssetsDirectory().getChildFile("manifest.json");
 
     if (!manifestFile.existsAsFile())
         return;
@@ -60,6 +60,10 @@ MindfulMIDI::MindfulMIDI()
 
         // Update our state object with the default parameter value
         state.insert_or_assign(paramId, defValue);
+
+        // The view state property has to have some value so that when state is loaded
+        // from the host, the key exists and is populated.
+        tableContent.insert_or_assign(staticNames::TABLE_CONTENT, static_cast<elem::js::Value>("{}") );
     }
 }
 
@@ -74,7 +78,7 @@ MindfulMIDI::~MindfulMIDI()
 //==============================================================================
 juce::AudioProcessorEditor* MindfulMIDI::createEditor()
 {
-    editor = new WebViewEditor(this, util::getAssetsDirectory(), 800, 500);
+    editor = new WebViewEditor(this, mh::util::getAssetsDirectory(), 800, 500);
 
     editor->setMidiOut = [this](const std::string& message, const int index)
     {
@@ -266,21 +270,44 @@ void MindfulMIDI::handleMidiOut(const std::string& _msg, int index)
     const juce::String msg(_msg);
     juce::StringArray bytes;
     bytes.addTokens(msg, " ", "\"");
-    std::vector<uint8_t> uint8_bytes;
+    std::vector<uint8_t> noteNumbers;
+
+
     for (auto& byte : bytes)
     {
-        uint8_bytes.push_back(byte.getHexValue32());
+        noteNumbers.push_back(byte.getHexValue32());
     }
     // This shuold be a standard MIDI note on message
-    if (uint8_bytes.size() == 3)
+    if (noteNumbers.size() == 3)
     {
-        const choc::midi::ShortMessage messageOut(uint8_bytes[0], uint8_bytes[1], uint8_bytes[2]);
+        std::vector<ChordNotes> chordProgession;
+        const choc::midi::ShortMessage messageOut(noteNumbers[0], noteNumbers[1], noteNumbers[2]);
+
+        // wrap then stash current chord notes for persistent state
+        // Convert std::vector<unit8_t> to elem::js::Array
+        elem::js::Array wrappedNN;
+        for (const uint8_t nn : noteNumbers) {
+            wrappedNN.push_back(static_cast<elem::js::Number>(nn));
+        }
+        tableContent.insert_or_assign( staticNames::NOTE_NUMBERS, wrappedNN );
+        // add the current chord to the current chord progression in tableContent state
+        // TODO: reset the chord progression from JS
+        ChordNotes chordNote;
+        chordNote.noteNumbers = noteNumbers;
+        chordProgession.push_back(chordNote);
+
         if (midi_out_fifo_queue.push({messageOut, index}))
         {
-            dispatchLogToUI("MIDI Out > [ " + std::to_string(uint8_bytes[0]) + ","
-                + std::to_string(uint8_bytes[1]) + ","
-                + std::to_string(uint8_bytes[2]) + " ]");
+            dispatchLogToUI("MIDI Out > [ " + std::to_string(noteNumbers[0]) + ","
+                + std::to_string(noteNumbers[1]) + ","
+                + std::to_string(noteNumbers[2]) + " ]");
         }
+
+        elem::js::Value wrappedChordProgression = mh::util::wrapChordsToJsValue(chordProgession);
+        tableContent.insert_or_assign( staticNames::CHORD_PROGRESSION, wrappedChordProgression  );
+        // notify the JS engine and View ( if its open )
+        // of new chord and chord progression
+        dispatchTableContentStateChange();
     }
     else
     {
@@ -423,7 +450,7 @@ void MindfulMIDI::initJavaScriptEngine()
     auto dspEntryFile = juce::URL("http://localhost:5173/dsp.main.js");
     auto dspEntryFileContents = dspEntryFile.readEntireTextStream().toStdString();
 #else
-    auto dspEntryFile = util::getAssetsDirectory().getChildFile(staticNames::MAIN_DSP_JS_FILE);
+    auto dspEntryFile = mh::util::getAssetsDirectory().getChildFile(staticNames::MAIN_DSP_JS_FILE);
 
     if (!dspEntryFile.existsAsFile())
         return;
@@ -514,12 +541,11 @@ void MindfulMIDI::dispatchMIDItoJS()
 
     const auto serializedMidi = elem::js::serialize(vec);
 
-    const auto* kDispatchScript = jsFunctions::receiveMidiScript;
+    const auto* kDispatchScript = jsFunctions::midi2jsScript;
 
     // Need the double serialize here to correctly form the string script. The first
     // serialize produces the payload we want, the second serialize ensures we can replace
     // the % character in the above script block and produce a valid javascript expression.
-
     const auto expr = juce::String(kDispatchScript).replace("%", elem::js::serialize(
                                                                 elem::js::serialize(serializedMidi))).
                                                     toStdString();

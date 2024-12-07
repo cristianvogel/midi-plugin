@@ -6,12 +6,18 @@
 #define HELPERS_H
 
 #include <juce_audio_basics/juce_audio_basics.h>
+#include <elem/Value.h>
 
-namespace util
+#include "PluginProcessor.h"
+namespace mh
 {
-    juce::File getAssetsDirectory();
-    bool isOdd(int num);
+    namespace util
+    {
+        juce::File getAssetsDirectory();
+        bool isOdd(int num);
 
-} // namespace util
+        elem::js::Value wrapChordsToJsValue(const std::vector<MindfulMIDI::ChordNotes>& chordProgession);
 
+    } // namespace util
+} // namespace mh
 #endif //HELPERS_H

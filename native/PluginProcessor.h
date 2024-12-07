@@ -79,7 +79,7 @@ public:
     //=== Harmony Persistent State
     struct ChordNotes
     {
-        std::vector<int> noteNumbers ={ 0, 0, 0 };
+        std::vector<uint8_t> noteNumbers ={ 0, 0, 0 };
     };
     struct TableContent
     {
@@ -147,14 +147,14 @@ namespace staticNames
     inline std::string SAMPLE_RATE = "sampleRate";
     inline std::string NATIVE_MESSAGE_FUNCTION_NAME = "__postNativeMessage__";
     inline std::string LOG_FUNCTION_NAME = "__log__";
-    inline std::string NOTE_NUMEBRS = "noteNumbers";
+    inline std::string NOTE_NUMBERS = "noteNumbers";
     inline std::string CHORD_PROGRESSION = "chordProgression";
 }
 
 
 namespace jsFunctions
 {
-    inline auto receiveMidiScript = R"script(
+    inline auto midi2jsScript = R"script(
     (function() {
       if (typeof globalThis.__receiveMIDI__ !== 'function')
         return false;
